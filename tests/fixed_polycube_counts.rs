@@ -1,4 +1,6 @@
-use polycubes::count_fixed_polycubes;
+use std::num::NonZeroUsize;
+
+use polycubes::{count_fixed_polycubes, count_fixed_polycubes_in_parallel};
 
 /// OEIS A001931, sizes 1 to 10.
 const KNOWN_FIXED_COUNTS: [u64; 10] = [
@@ -33,4 +35,15 @@ fn counts_the_single_cube() {
     let counts = count_fixed_polycubes(1);
 
     assert_eq!(counts, [1]);
+}
+
+#[test]
+fn parallel_count_matches_oeis_a001931_for_every_max_size() {
+    let thread_count = NonZeroUsize::new(4).expect("four is not zero");
+
+    for max_cell_count in 1..=KNOWN_FIXED_COUNTS.len() {
+        let counts = count_fixed_polycubes_in_parallel(max_cell_count, thread_count);
+
+        assert_eq!(counts, KNOWN_FIXED_COUNTS[..max_cell_count]);
+    }
 }

@@ -2,4 +2,4 @@
 
 mod redelmeier;
 
-pub use redelmeier::count_fixed_polycubes;
+pub use redelmeier::{count_fixed_polycubes, count_fixed_polycubes_in_parallel};

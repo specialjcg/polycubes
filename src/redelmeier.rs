@@ -4,9 +4,15 @@
 //! lexicographically smallest cell, placed at the origin. Cells that precede
 //! the origin in (z, y, x) order are forbidden, which removes translations.
 
+use std::num::NonZeroUsize;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread;
+
 const NEIGHBOUR_COUNT: usize = 6;
 /// Number of final cells counted in closed form instead of being enumerated.
 const CLOSED_FORM_CELL_COUNT: usize = 3;
+/// Size of the polycubes whose subtrees are shared out between threads.
+const FORK_CELL_COUNT: usize = 6;
 
 /// Counts fixed polycubes (distinct up to translation only) of every size
 /// from 1 to `max_cell_count`.
@@ -18,12 +24,79 @@ pub fn count_fixed_polycubes(max_cell_count: usize) -> Vec<u64> {
     if max_cell_count == 0 {
         return Vec::new();
     }
-    let mut enumerator = Enumerator::new(max_cell_count);
+    let mut enumerator = Enumerator::new(max_cell_count, None);
     enumerator.extend(0, 0);
     enumerator.counts
 }
 
-struct Enumerator {
+/// Same result as [`count_fixed_polycubes`], computed on `thread_count` threads.
+#[must_use]
+pub fn count_fixed_polycubes_in_parallel(
+    max_cell_count: usize,
+    thread_count: NonZeroUsize,
+) -> Vec<u64> {
+    if max_cell_count < FORK_CELL_COUNT + CLOSED_FORM_CELL_COUNT {
+        return count_fixed_polycubes(max_cell_count);
+    }
+    let claims = SubtreeClaims::new(fork_subtree_count());
+    let counts_per_thread: Vec<Vec<u64>> = thread::scope(|scope| {
+        let workers: Vec<_> = (0..thread_count.get())
+            .map(|_| scope.spawn(|| count_claimed_subtrees(max_cell_count, &claims)))
+            .collect();
+        workers
+            .into_iter()
+            .map(|worker| worker.join().expect("worker thread panicked"))
+            .collect()
+    });
+    merge_thread_counts(&counts_per_thread)
+}
+
+fn fork_subtree_count() -> usize {
+    let fork_count = count_fixed_polycubes(FORK_CELL_COUNT)[FORK_CELL_COUNT - 1];
+    usize::try_from(fork_count).expect("fork subtree count fits in usize")
+}
+
+fn count_claimed_subtrees(max_cell_count: usize, claims: &SubtreeClaims) -> Vec<u64> {
+    let mut enumerator = Enumerator::new(max_cell_count, Some(claims));
+    enumerator.extend(0, 0);
+    enumerator.counts
+}
+
+/// Every thread walks the whole tree down to the fork size, so those counts
+/// are complete in each thread; beyond it each thread only holds the subtrees
+/// it claimed.
+fn merge_thread_counts(counts_per_thread: &[Vec<u64>]) -> Vec<u64> {
+    let mut merged_counts = counts_per_thread[0].clone();
+    for thread_counts in &counts_per_thread[1..] {
+        let partial_counts = merged_counts.iter_mut().zip(thread_counts);
+        for (merged_count, thread_count) in partial_counts.skip(FORK_CELL_COUNT) {
+            *merged_count += thread_count;
+        }
+    }
+    merged_counts
+}
+
+/// Shared register of the fork-size subtrees already taken by a thread.
+///
+/// Threads walk the tree in the same order, so a subtree is identified by its
+/// rank among the polycubes of the fork size.
+struct SubtreeClaims {
+    is_claimed: Vec<AtomicBool>,
+}
+
+impl SubtreeClaims {
+    fn new(subtree_count: usize) -> Self {
+        Self {
+            is_claimed: (0..subtree_count).map(|_| AtomicBool::new(false)).collect(),
+        }
+    }
+
+    fn try_claim(&self, subtree_rank: usize) -> bool {
+        !self.is_claimed[subtree_rank].swap(true, Ordering::Relaxed)
+    }
+}
+
+struct Enumerator<'claims> {
     /// Cells already in the polycube, already queued, or forbidden.
     is_reached: Vec<bool>,
     /// Append-only queue of candidate cells; each recursion level owns a suffix.
@@ -33,10 +106,13 @@ struct Enumerator {
     neighbour_offsets: [isize; NEIGHBOUR_COUNT],
     counts: Vec<u64>,
     max_cell_count: usize,
+    /// `None` when this enumerator explores every subtree itself.
+    claims: Option<&'claims SubtreeClaims>,
+    next_subtree_rank: usize,
 }
 
-impl Enumerator {
-    fn new(max_cell_count: usize) -> Self {
+impl<'claims> Enumerator<'claims> {
+    fn new(max_cell_count: usize, claims: Option<&'claims SubtreeClaims>) -> Self {
         let lattice = Lattice::new(max_cell_count);
         let origin = lattice.origin();
         let mut is_reached = lattice.forbidden_cells();
@@ -48,6 +124,8 @@ impl Enumerator {
             neighbour_offsets: lattice.neighbour_offsets(),
             counts: vec![0; max_cell_count],
             max_cell_count,
+            claims,
+            next_subtree_rank: 0,
         }
     }
 
@@ -67,10 +145,22 @@ impl Enumerator {
             if cell_count == self.max_cell_count {
                 continue;
             }
+            if cell_count == FORK_CELL_COUNT && !self.claims_next_subtree() {
+                continue;
+            }
             self.queue_unreached_neighbours(cell);
             self.extend(untried_index + 1, cell_count);
             self.forget_cells_queued_after(untried_end);
         }
+    }
+
+    fn claims_next_subtree(&mut self) -> bool {
+        let Some(claims) = self.claims else {
+            return true;
+        };
+        let subtree_rank = self.next_subtree_rank;
+        self.next_subtree_rank += 1;
+        claims.try_claim(subtree_rank)
     }
 
     /// Counts, without visiting them, every way to add one, two or three
