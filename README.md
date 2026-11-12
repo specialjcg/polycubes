@@ -18,7 +18,7 @@ Algorithme de Redelmeier généralisé au réseau cubique, compte les polycubes 
 cargo run --release -- 13
 ```
 
-Validé contre A001931 pour n = 1 à 10 par les tests (`cargo test`), pour chaque taille maximale de 1 à 10. Les valeurs n = 11 à 15 sorties par le binaire (…, 3 322 769 321, 24 946 773 111, 188 625 900 446) ne sont pas couvertes par un test.
+Validé contre A001931 pour n = 1 à 10 par les tests (`cargo test`), pour chaque taille maximale de 1 à 10. Les valeurs n = 11 à 16 sorties par le binaire (…, 3 322 769 321, 24 946 773 111, 188 625 900 446, 1 435 074 454 755) ne sont pas couvertes par un test.
 
 ## Mesure
 
@@ -28,6 +28,7 @@ Validé contre A001931 pour n = 1 à 10 par les tests (`cargo test`), pour chaqu
 | 3 derniers cubes en formule fermée | 13 | 3 839 107 918 | 6,0 s | 639,4 M/s |
 | 3 derniers cubes en formule fermée | 15 | 217 411 781 475 | 350,5 s | 620,3 M/s |
 | idem, 8 threads | 15 | 217 411 781 475 | 78,3 s | 2 777,3 M/s |
+| idem, 8 threads | 16 | 1 652 486 236 230 | 615,7 s | 2 683,7 M/s |
 
 Référence externe (README de Thompson, M1 8 threads) : n = 15 en 10,7 s.
 
