@@ -12,7 +12,7 @@ Dénombrement des polycubes de n cubes. Aucune formule connue ; objectif à term
 
 ## Ce qui existe
 
-Algorithme de Redelmeier généralisé au réseau cubique, compte les polycubes **fixes**. Les 3 derniers cubes sont comptés en formule fermée (dérivation dans la doc de `count_final_extensions`, `src/redelmeier.rs`), sans visiter les polycubes. Parallélisme : chaque thread parcourt l'arbre jusqu'à la taille 6 et réclame les sous-arbres (23 502) dans un registre atomique partagé ; aucune dépendance externe.
+Algorithme de Redelmeier généralisé au réseau cubique, compte les polycubes **fixes**. Les 3 derniers cubes sont comptés en formule fermée (dérivation dans la doc de `count_final_extensions`, `src/redelmeier.rs`), sans visiter les polycubes ; les sommes de la formule (`FrontierTallies`) sont tenues à jour à chaque changement d'état d'une cellule, donc le comptage final est en O(1) par nœud. Parallélisme : chaque thread parcourt l'arbre jusqu'à la taille 6 et réclame les sous-arbres (23 502) dans un registre atomique partagé ; aucune dépendance externe.
 
 ```bash
 cargo run --release -- 13
@@ -29,8 +29,10 @@ Validé contre A001931 pour n = 1 à 10 par les tests (`cargo test`), pour chaqu
 | 3 derniers cubes en formule fermée | 15 | 217 411 781 475 | 350,5 s | 620,3 M/s |
 | idem, 8 threads | 15 | 217 411 781 475 | 78,3 s | 2 777,3 M/s |
 | idem, 8 threads | 16 | 1 652 486 236 230 | 615,7 s | 2 683,7 M/s |
+| sommes de frontière incrémentales, 8 threads | 15 | 217 411 781 475 | 35,8 s | 6 068,1 M/s |
+| sommes de frontière incrémentales, 8 threads | 16 | 1 652 486 236 230 | 200,3 s | 8 250,6 M/s |
 
-Référence externe (README de Thompson, M1 8 threads) : n = 15 en 10,7 s.
+Référence externe (README de Thompson, M1 8 threads) : n = 15 en 10,7 s, n = 16 en 52 s.
 
 Machine : 8 threads matériels (`nproc`). Accélération mesurée ×4,5 sur 8 threads à n = 15.
 
@@ -40,10 +42,14 @@ Croissance d'environ ×7,6 par cube. n = 22 a demandé environ 10 jours sur 64 t
 
 ## Pistes
 
-1. Profiler le comptage fermé (36 lectures par cellule non-essayée ; Dodds utilise des compteurs de voisins par octet).
+1. Étendre la formule fermée à 4 cubes (le coût restant est la mise à jour des compteurs au dernier niveau de l'arbre).
 2. Burnside sur les 24 rotations pour obtenir A000162 à partir des fixes.
-3. Étendre la formule fermée à 4 cubes.
+3. Profiler pour de bon : `perf` est bloqué sur cette machine (`perf_event_paranoid = 4`).
 
 ## Préceptes
 
 TDD (rouge → vert → refactor), `cargo fmt`, `cargo clippy --all-targets -- -D warnings`, `cargo test` avant tout commit ; Conventional Commits ; mesurer avant d'optimiser.
+
+## Essais rejetés
+
+- Mise à jour des sommes sans branchement (multiplication par un masque d'état au lieu d'un `match`) : n = 15 en 58,9 s contre 35,8 s. Une seule mesure de chaque côté.
