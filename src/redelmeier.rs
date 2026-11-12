@@ -8,7 +8,8 @@ use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 
-const NEIGHBOUR_COUNT: usize = 6;
+use crate::lattice::{Lattice, NEIGHBOUR_COUNT};
+
 /// Number of final cells counted in closed form instead of being enumerated.
 const CLOSED_FORM_CELL_COUNT: usize = 3;
 /// Size of the polycubes whose subtrees are shared out between threads.
@@ -96,13 +97,45 @@ impl SubtreeClaims {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CellState {
+    /// Neither in the polycube nor queued.
+    Free,
+    /// Queued as a candidate for extending the polycube.
+    Untried,
+    /// In the polycube, discarded by an ancestor, or forbidden.
+    Closed,
+}
+
+#[derive(Clone, Copy)]
+struct Cell {
+    state: CellState,
+    free_neighbour_count: u8,
+    untried_neighbour_count: u8,
+}
+
+/// Sums over the untried cells `u` and the free cells `f`, kept up to date at
+/// every state change so that the final extensions are counted in O(1).
+///
+/// `d(u)` is the number of free neighbours of `u`, `m(f)` the number of
+/// untried neighbours of `f` and `e(f)` its number of free neighbours.
+#[derive(Clone, Copy, Default)]
+struct FrontierTallies {
+    /// `sum d(u)`
+    free_neighbour_total: u64,
+    /// `sum C(d(u), 2)`
+    free_neighbour_pair_total: u64,
+    /// `sum C(m(f), 2)`
+    shared_free_neighbour_pair_total: u64,
+    /// `sum m(f) * e(f)`
+    two_step_path_total: u64,
+}
+
 struct Enumerator<'claims> {
-    /// Cells already in the polycube, already queued, or forbidden.
-    is_reached: Vec<bool>,
+    cells: Vec<Cell>,
+    tallies: FrontierTallies,
     /// Append-only queue of candidate cells; each recursion level owns a suffix.
     untried_cells: Vec<usize>,
-    /// Scratch board: untried neighbours seen so far for each free cell.
-    untried_neighbour_counts: Vec<u8>,
     neighbour_offsets: [isize; NEIGHBOUR_COUNT],
     counts: Vec<u64>,
     max_cell_count: usize,
@@ -115,18 +148,33 @@ impl<'claims> Enumerator<'claims> {
     fn new(max_cell_count: usize, claims: Option<&'claims SubtreeClaims>) -> Self {
         let lattice = Lattice::new(max_cell_count);
         let origin = lattice.origin();
-        let mut is_reached = lattice.forbidden_cells();
-        is_reached[origin] = true;
-        Self {
-            untried_neighbour_counts: vec![0; is_reached.len()],
-            is_reached,
-            untried_cells: vec![origin],
+        let is_forbidden = lattice.forbidden_cells();
+        let allowed_neighbour_counts = lattice.allowed_neighbour_counts(&is_forbidden);
+        let cells = is_forbidden
+            .iter()
+            .zip(allowed_neighbour_counts)
+            .map(|(&is_cell_forbidden, free_neighbour_count)| Cell {
+                state: if is_cell_forbidden {
+                    CellState::Closed
+                } else {
+                    CellState::Free
+                },
+                free_neighbour_count,
+                untried_neighbour_count: 0,
+            })
+            .collect();
+        let mut enumerator = Self {
+            cells,
+            tallies: FrontierTallies::default(),
+            untried_cells: Vec::new(),
             neighbour_offsets: lattice.neighbour_offsets(),
             counts: vec![0; max_cell_count],
             max_cell_count,
             claims,
             next_subtree_rank: 0,
-        }
+        };
+        enumerator.queue(origin);
+        enumerator
     }
 
     /// Extends a polycube of `placed_cell_count` cells with every untried
@@ -138,9 +186,12 @@ impl<'claims> Enumerator<'claims> {
         }
         let untried_end = self.untried_cells.len();
         let cell_count = placed_cell_count + 1;
+        let tallies_before_level = self.tallies;
         for untried_index in first_untried..untried_end {
             let cell = self.untried_cells[untried_index];
             self.counts[cell_count - 1] += 1;
+            // Closed for this subtree and for the following siblings.
+            self.close(cell);
             // Only reachable when the maximum size is below the closed-form depth.
             if cell_count == self.max_cell_count {
                 continue;
@@ -148,10 +199,16 @@ impl<'claims> Enumerator<'claims> {
             if cell_count == FORK_CELL_COUNT && !self.claims_next_subtree() {
                 continue;
             }
-            self.queue_unreached_neighbours(cell);
+            let tallies_before_subtree = self.tallies;
+            self.queue_free_neighbours(cell);
             self.extend(untried_index + 1, cell_count);
-            self.forget_cells_queued_after(untried_end);
+            self.free_cells_queued_after(untried_end);
+            self.tallies = tallies_before_subtree;
         }
+        for untried_index in (first_untried..untried_end).rev() {
+            self.reopen(self.untried_cells[untried_index]);
+        }
+        self.tallies = tallies_before_level;
     }
 
     fn claims_next_subtree(&mut self) -> bool {
@@ -168,9 +225,7 @@ impl<'claims> Enumerator<'claims> {
     ///
     /// A set of added cells is valid when each cell is untried, or free and
     /// linked to an untried cell of the set through free cells of the set.
-    /// With `U` the untried cells, `d(u)` the free neighbours of `u`, `m(f)`
-    /// the untried neighbours of a free cell `f` and `e(f)` its free
-    /// neighbours:
+    /// With `U` the untried cells and the notations of [`FrontierTallies`]:
     ///
     /// - one cell: `|U|`
     /// - two cells: `C(|U|, 2) + sum d(u)`
@@ -180,68 +235,98 @@ impl<'claims> Enumerator<'claims> {
     ///   lattice is bipartite, so a free cell two steps away from `u` is
     ///   never also a neighbour of `u`).
     fn count_final_extensions(&mut self, first_untried: usize, placed_cell_count: usize) {
-        let untried_end = self.untried_cells.len();
-        let untried_count = (untried_end - first_untried) as u64;
-        let mut free_neighbour_total = 0;
-        let mut free_neighbour_pair_total = 0;
-        let mut shared_free_neighbour_pair_total = 0;
-        let mut two_step_path_total = 0;
-        for untried_index in first_untried..untried_end {
-            let untried_cell = self.untried_cells[untried_index];
-            let mut free_neighbour_count = 0;
-            for offset in self.neighbour_offsets {
-                let free_cell = untried_cell.wrapping_add_signed(offset);
-                if self.is_reached[free_cell] {
-                    continue;
-                }
-                free_neighbour_count += 1;
-                shared_free_neighbour_pair_total +=
-                    u64::from(self.untried_neighbour_counts[free_cell]);
-                self.untried_neighbour_counts[free_cell] += 1;
-                two_step_path_total += self.free_neighbour_count(free_cell);
-            }
-            free_neighbour_total += free_neighbour_count;
-            free_neighbour_pair_total += choose_two(free_neighbour_count);
-        }
-        self.clear_untried_neighbour_counts(first_untried);
-
-        let two_untried_one_free = untried_count.saturating_sub(1) * free_neighbour_total
-            - shared_free_neighbour_pair_total;
-        let one_untried_two_free = free_neighbour_pair_total + two_step_path_total;
+        let untried_count = (self.untried_cells.len() - first_untried) as u64;
+        let tallies = self.tallies;
+        let two_untried_one_free = untried_count.saturating_sub(1) * tallies.free_neighbour_total
+            - tallies.shared_free_neighbour_pair_total;
+        let one_untried_two_free = tallies.free_neighbour_pair_total + tallies.two_step_path_total;
         self.counts[placed_cell_count] += untried_count;
-        self.counts[placed_cell_count + 1] += choose_two(untried_count) + free_neighbour_total;
+        self.counts[placed_cell_count + 1] +=
+            choose_two(untried_count) + tallies.free_neighbour_total;
         self.counts[placed_cell_count + 2] +=
             choose_three(untried_count) + two_untried_one_free + one_untried_two_free;
     }
 
-    fn free_neighbour_count(&self, cell: usize) -> u64 {
-        self.neighbour_offsets
-            .iter()
-            .filter(|&&offset| !self.is_reached[cell.wrapping_add_signed(offset)])
-            .count() as u64
-    }
-
-    fn clear_untried_neighbour_counts(&mut self, first_untried: usize) {
-        for &untried_cell in &self.untried_cells[first_untried..] {
-            for offset in self.neighbour_offsets {
-                self.untried_neighbour_counts[untried_cell.wrapping_add_signed(offset)] = 0;
-            }
-        }
-    }
-
-    fn queue_unreached_neighbours(&mut self, cell: usize) {
+    fn queue_free_neighbours(&mut self, cell: usize) {
         for offset in self.neighbour_offsets {
             let neighbour = cell.wrapping_add_signed(offset);
-            if !self.is_reached[neighbour] {
-                self.is_reached[neighbour] = true;
-                self.untried_cells.push(neighbour);
+            if self.cells[neighbour].state == CellState::Free {
+                self.queue(neighbour);
             }
         }
     }
 
-    fn forget_cells_queued_after(&mut self, untried_end: usize) {
-        for forgotten_cell in self.untried_cells.drain(untried_end..) {
-            self.is_reached[forgotten_cell] = false;
+    /// Turns a free cell into an untried one.
+    fn queue(&mut self, free_cell: usize) {
+        let tallies = &mut self.tallies;
+        let queued = &mut self.cells[free_cell];
+        let free_neighbour_count = u64::from(queued.free_neighbour_count);
+        let untried_neighbour_count = u64::from(queued.untried_neighbour_count);
+        queued.state = CellState::Untried;
+        tallies.shared_free_neighbour_pair_total -= choose_two(untried_neighbour_count);
+        tallies.two_step_path_total -= untried_neighbour_count * free_neighbour_count;
+        tallies.free_neighbour_total += free_neighbour_count;
+        tallies.free_neighbour_pair_total += choose_two(free_neighbour_count);
+        for offset in self.neighbour_offsets {
+            let neighbour = &mut self.cells[free_cell.wrapping_add_signed(offset)];
+            let untried_neighbours_before = u64::from(neighbour.untried_neighbour_count);
+            neighbour.untried_neighbour_count += 1;
+            neighbour.free_neighbour_count -= 1;
+            let free_neighbours_after = u64::from(neighbour.free_neighbour_count);
+            match neighbour.state {
+                CellState::Free => {
+                    tallies.shared_free_neighbour_pair_total += untried_neighbours_before;
+                    tallies.two_step_path_total += free_neighbours_after;
+                    tallies.two_step_path_total -= untried_neighbours_before;
+                }
+                CellState::Untried => {
+                    tallies.free_neighbour_total -= 1;
+                    tallies.free_neighbour_pair_total -= free_neighbours_after;
+                }
+                CellState::Closed => {}
+            }
+        }
+        self.untried_cells.push(free_cell);
+    }
+
+    /// Undoes [`Self::queue`] for every cell queued after `untried_end`.
+    /// Tallies are restored by the caller from a snapshot.
+    fn free_cells_queued_after(&mut self, untried_end: usize) {
+        for freed_cell in self.untried_cells.drain(untried_end..).rev() {
+            self.cells[freed_cell].state = CellState::Free;
+            for offset in self.neighbour_offsets {
+                let neighbour = &mut self.cells[freed_cell.wrapping_add_signed(offset)];
+                neighbour.untried_neighbour_count -= 1;
+                neighbour.free_neighbour_count += 1;
+            }
+        }
+    }
+
+    /// Turns an untried cell into a closed one.
+    fn close(&mut self, untried_cell: usize) {
+        let tallies = &mut self.tallies;
+        let closed = &mut self.cells[untried_cell];
+        let free_neighbour_count = u64::from(closed.free_neighbour_count);
+        closed.state = CellState::Closed;
+        tallies.free_neighbour_total -= free_neighbour_count;
+        tallies.free_neighbour_pair_total -= choose_two(free_neighbour_count);
+        for offset in self.neighbour_offsets {
+            let neighbour = &mut self.cells[untried_cell.wrapping_add_signed(offset)];
+            neighbour.untried_neighbour_count -= 1;
+            if neighbour.state == CellState::Free {
+                tallies.shared_free_neighbour_pair_total -=
+                    u64::from(neighbour.untried_neighbour_count);
+                tallies.two_step_path_total -= u64::from(neighbour.free_neighbour_count);
+            }
+        }
+    }
+
+    /// Undoes [`Self::close`]. Tallies are restored by the caller from a snapshot.
+    fn reopen(&mut self, closed_cell: usize) {
+        self.cells[closed_cell].state = CellState::Untried;
+        for offset in self.neighbour_offsets {
+            let neighbour = &mut self.cells[closed_cell.wrapping_add_signed(offset)];
+            neighbour.untried_neighbour_count += 1;
         }
     }
 }
@@ -252,62 +337,4 @@ fn choose_two(item_count: u64) -> u64 {
 
 fn choose_three(item_count: u64) -> u64 {
     choose_two(item_count) * item_count.saturating_sub(2) / 3
-}
-
-/// Box of the cubic lattice large enough to hold any polycube grown from the
-/// origin, surrounded by one layer of forbidden cells so that neighbour
-/// lookups never leave the box.
-struct Lattice {
-    /// Largest |x| and |y|, border layer included.
-    horizontal_radius: usize,
-    side: usize,
-    layer_count: usize,
-}
-
-impl Lattice {
-    fn new(max_cell_count: usize) -> Self {
-        let horizontal_radius = max_cell_count;
-        Self {
-            horizontal_radius,
-            side: 2 * horizontal_radius + 1,
-            // z ranges over -1 (forbidden) ..= max_cell_count (border).
-            layer_count: max_cell_count + 2,
-        }
-    }
-
-    fn cell_index(&self, column: usize, row: usize, layer: usize) -> usize {
-        (layer * self.side + row) * self.side + column
-    }
-
-    fn origin(&self) -> usize {
-        self.cell_index(self.horizontal_radius, self.horizontal_radius, 1)
-    }
-
-    fn neighbour_offsets(&self) -> [isize; NEIGHBOUR_COUNT] {
-        let row_stride = self.side as isize;
-        let layer_stride = row_stride * row_stride;
-        [1, -1, row_stride, -row_stride, layer_stride, -layer_stride]
-    }
-
-    /// Marks the border and every cell preceding the origin in (z, y, x) order.
-    fn forbidden_cells(&self) -> Vec<bool> {
-        let origin = self.origin();
-        let last = self.side - 1;
-        let top_layer = self.layer_count - 1;
-        let mut is_forbidden = vec![false; self.side * self.side * self.layer_count];
-        for layer in 0..self.layer_count {
-            for row in 0..self.side {
-                for column in 0..self.side {
-                    let cell = self.cell_index(column, row, layer);
-                    let is_border = layer == top_layer
-                        || row == 0
-                        || row == last
-                        || column == 0
-                        || column == last;
-                    is_forbidden[cell] = is_border || cell < origin;
-                }
-            }
-        }
-        is_forbidden
-    }
 }
