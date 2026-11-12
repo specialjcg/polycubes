@@ -2,6 +2,8 @@
 
 pub(crate) const NEIGHBOUR_COUNT: usize = 6;
 
+pub(crate) type Coordinates = [i32; 3];
+
 /// Box large enough to hold any polycube grown from the origin, surrounded by
 /// one layer of forbidden cells so that neighbour lookups never leave the box.
 pub(crate) struct Lattice {
@@ -72,5 +74,28 @@ impl Lattice {
             }
         }
         allowed_neighbour_counts
+    }
+
+    /// Coordinates (x, y, z) of a cell relative to the origin.
+    pub(crate) fn coordinates(&self, cell: usize) -> Coordinates {
+        let radius = self.horizontal_radius as i32;
+        let column = cell % self.side;
+        let row = cell / self.side % self.side;
+        let layer = cell / (self.side * self.side);
+        [
+            column as i32 - radius,
+            row as i32 - radius,
+            layer as i32 - 1,
+        ]
+    }
+
+    /// Cell at the given coordinates, if it lies inside the box.
+    pub(crate) fn cell_at(&self, [x, y, z]: Coordinates) -> Option<usize> {
+        let radius = self.horizontal_radius as i32;
+        let column = usize::try_from(x + radius).ok()?;
+        let row = usize::try_from(y + radius).ok()?;
+        let layer = usize::try_from(z + 1).ok()?;
+        let is_inside = column < self.side && row < self.side && layer < self.layer_count;
+        is_inside.then(|| self.cell_index(column, row, layer))
     }
 }

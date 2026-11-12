@@ -14,11 +14,17 @@ Dénombrement des polycubes de n cubes. Aucune formule connue ; objectif à term
 
 Algorithme de Redelmeier généralisé au réseau cubique, compte les polycubes **fixes**. Les 4 derniers cubes sont comptés en formule fermée, sans visiter les polycubes : un balayage de la frontière (cellules non-essayées, leurs voisins libres, chemins de 2 pas, carrés unité) fournit les sommes de `FrontierSums`, dont `extension_counts` déduit le nombre d'ajouts de 1 à 4 cubes (`src/redelmeier.rs`). Formule dérivée ici, validée seulement par les tests. Parallélisme : chaque thread parcourt l'arbre jusqu'à la taille 6 et réclame les sous-arbres (23 502) dans un registre atomique partagé ; aucune dépendance externe.
 
+**Polycubes à rotation près (A000162)** par le lemme de Burnside sur les 24 rotations (`src/symmetry.rs`) : (fixes + Σ polycubes envoyés sur un translaté d'eux-mêmes par chaque rotation) / 24. Une rotation par classe de conjugaison (tailles 3, 6, 6, 8). Pour chaque rotation et chaque décalage possible, un Redelmeier restreint aux polycubes invariants abandonne une branche dès que les images restant à placer ne tiennent plus ou que l'une d'elles a été écartée. Mono-thread, non optimisé.
+
 ```bash
 cargo run --release -- 13
 ```
 
+Sortie : taille, fixes (A001931), à rotation près (A000162).
+
 Validé contre A001931 pour n = 1 à 10 par les tests (`cargo test`), pour chaque taille maximale de 1 à 10. Les valeurs n = 11 à 16 sorties par le binaire (…, 3 322 769 321, 24 946 773 111, 188 625 900 446, 1 435 074 454 755) ne sont pas couvertes par un test.
+
+Validé contre A000162 pour n = 1 à 10 par les tests. Le binaire redonne aussi a(11) à a(16) de la page OEIS (…, 7 859 514 470, 59 795 121 480), hors tests.
 
 ## Mesure
 
@@ -41,6 +47,8 @@ Comparaison en temps CPU (machine chargée par d'autres calculs, temps mur non f
 
 Gain ×1,4. n = 16 redonne 1 435 074 454 755.
 
+Partie symétrique (Burnside), 1 thread, machine chargée : n = 14 en 11 s, n = 16 en 82 s, contre 197 s sur 8 threads pour les fixes à n = 16. Croissance d'environ ×3 par cube, donc négligeable devant les fixes quand n grandit.
+
 Référence externe (README de Thompson, M1 8 threads) : n = 15 en 10,7 s, n = 16 en 52 s.
 
 Machine : 8 threads matériels (`nproc`). Accélération mesurée ×4,5 sur 8 threads à n = 15.
@@ -52,7 +60,7 @@ Croissance d'environ ×7,6 par cube. n = 22 a demandé environ 10 jours sur 64 t
 ## Pistes
 
 1. Alléger le balayage de frontière (jusqu'à 36 cellules lues par cellule non-essayée).
-2. Burnside sur les 24 rotations pour obtenir A000162 à partir des fixes.
+2. Paralléliser la partie symétrique (un travail par couple rotation-décalage).
 3. Profiler pour de bon : `perf` est bloqué sur cette machine (`perf_event_paranoid = 4`).
 
 ## Préceptes
