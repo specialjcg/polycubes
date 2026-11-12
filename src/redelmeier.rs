@@ -5,6 +5,8 @@
 //! the origin in (z, y, x) order are forbidden, which removes translations.
 
 const NEIGHBOUR_COUNT: usize = 6;
+/// Number of final cells counted in closed form instead of being enumerated.
+const CLOSED_FORM_CELL_COUNT: usize = 3;
 
 /// Counts fixed polycubes (distinct up to translation only) of every size
 /// from 1 to `max_cell_count`.
@@ -26,6 +28,8 @@ struct Enumerator {
     is_reached: Vec<bool>,
     /// Append-only queue of candidate cells; each recursion level owns a suffix.
     untried_cells: Vec<usize>,
+    /// Scratch board: untried neighbours seen so far for each free cell.
+    untried_neighbour_counts: Vec<u8>,
     neighbour_offsets: [isize; NEIGHBOUR_COUNT],
     counts: Vec<u64>,
     max_cell_count: usize,
@@ -38,6 +42,7 @@ impl Enumerator {
         let mut is_reached = lattice.forbidden_cells();
         is_reached[origin] = true;
         Self {
+            untried_neighbour_counts: vec![0; is_reached.len()],
             is_reached,
             untried_cells: vec![origin],
             neighbour_offsets: lattice.neighbour_offsets(),
@@ -49,18 +54,88 @@ impl Enumerator {
     /// Extends a polycube of `placed_cell_count` cells with every untried
     /// cell from `first_untried` onwards.
     fn extend(&mut self, first_untried: usize, placed_cell_count: usize) {
-        let untried_end = self.untried_cells.len();
-        let cell_count = placed_cell_count + 1;
-        if cell_count == self.max_cell_count {
-            self.counts[cell_count - 1] += (untried_end - first_untried) as u64;
+        if placed_cell_count + CLOSED_FORM_CELL_COUNT == self.max_cell_count {
+            self.count_final_extensions(first_untried, placed_cell_count);
             return;
         }
+        let untried_end = self.untried_cells.len();
+        let cell_count = placed_cell_count + 1;
         for untried_index in first_untried..untried_end {
             let cell = self.untried_cells[untried_index];
             self.counts[cell_count - 1] += 1;
+            // Only reachable when the maximum size is below the closed-form depth.
+            if cell_count == self.max_cell_count {
+                continue;
+            }
             self.queue_unreached_neighbours(cell);
             self.extend(untried_index + 1, cell_count);
             self.forget_cells_queued_after(untried_end);
+        }
+    }
+
+    /// Counts, without visiting them, every way to add one, two or three
+    /// cells to the current polycube.
+    ///
+    /// A set of added cells is valid when each cell is untried, or free and
+    /// linked to an untried cell of the set through free cells of the set.
+    /// With `U` the untried cells, `d(u)` the free neighbours of `u`, `m(f)`
+    /// the untried neighbours of a free cell `f` and `e(f)` its free
+    /// neighbours:
+    ///
+    /// - one cell: `|U|`
+    /// - two cells: `C(|U|, 2) + sum d(u)`
+    /// - three cells: `C(|U|, 3)` (all untried)
+    ///   `+ (|U| - 1) * sum d(u) - sum C(m(f), 2)` (two untried, one free)
+    ///   `+ sum C(d(u), 2) + sum m(f) * e(f)` (one untried, two free; the
+    ///   lattice is bipartite, so a free cell two steps away from `u` is
+    ///   never also a neighbour of `u`).
+    fn count_final_extensions(&mut self, first_untried: usize, placed_cell_count: usize) {
+        let untried_end = self.untried_cells.len();
+        let untried_count = (untried_end - first_untried) as u64;
+        let mut free_neighbour_total = 0;
+        let mut free_neighbour_pair_total = 0;
+        let mut shared_free_neighbour_pair_total = 0;
+        let mut two_step_path_total = 0;
+        for untried_index in first_untried..untried_end {
+            let untried_cell = self.untried_cells[untried_index];
+            let mut free_neighbour_count = 0;
+            for offset in self.neighbour_offsets {
+                let free_cell = untried_cell.wrapping_add_signed(offset);
+                if self.is_reached[free_cell] {
+                    continue;
+                }
+                free_neighbour_count += 1;
+                shared_free_neighbour_pair_total +=
+                    u64::from(self.untried_neighbour_counts[free_cell]);
+                self.untried_neighbour_counts[free_cell] += 1;
+                two_step_path_total += self.free_neighbour_count(free_cell);
+            }
+            free_neighbour_total += free_neighbour_count;
+            free_neighbour_pair_total += choose_two(free_neighbour_count);
+        }
+        self.clear_untried_neighbour_counts(first_untried);
+
+        let two_untried_one_free = untried_count.saturating_sub(1) * free_neighbour_total
+            - shared_free_neighbour_pair_total;
+        let one_untried_two_free = free_neighbour_pair_total + two_step_path_total;
+        self.counts[placed_cell_count] += untried_count;
+        self.counts[placed_cell_count + 1] += choose_two(untried_count) + free_neighbour_total;
+        self.counts[placed_cell_count + 2] +=
+            choose_three(untried_count) + two_untried_one_free + one_untried_two_free;
+    }
+
+    fn free_neighbour_count(&self, cell: usize) -> u64 {
+        self.neighbour_offsets
+            .iter()
+            .filter(|&&offset| !self.is_reached[cell.wrapping_add_signed(offset)])
+            .count() as u64
+    }
+
+    fn clear_untried_neighbour_counts(&mut self, first_untried: usize) {
+        for &untried_cell in &self.untried_cells[first_untried..] {
+            for offset in self.neighbour_offsets {
+                self.untried_neighbour_counts[untried_cell.wrapping_add_signed(offset)] = 0;
+            }
         }
     }
 
@@ -79,6 +154,14 @@ impl Enumerator {
             self.is_reached[forgotten_cell] = false;
         }
     }
+}
+
+fn choose_two(item_count: u64) -> u64 {
+    item_count * item_count.saturating_sub(1) / 2
+}
+
+fn choose_three(item_count: u64) -> u64 {
+    choose_two(item_count) * item_count.saturating_sub(2) / 3
 }
 
 /// Box of the cubic lattice large enough to hold any polycube grown from the

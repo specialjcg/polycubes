@@ -13,6 +13,15 @@ fn matches_oeis_a001931_up_to_size_10() {
 }
 
 #[test]
+fn matches_oeis_a001931_for_every_smaller_max_size() {
+    for max_cell_count in 1..KNOWN_FIXED_COUNTS.len() {
+        let counts = count_fixed_polycubes(max_cell_count);
+
+        assert_eq!(counts, KNOWN_FIXED_COUNTS[..max_cell_count]);
+    }
+}
+
+#[test]
 fn returns_no_count_when_max_size_is_zero() {
     let counts = count_fixed_polycubes(0);
 
