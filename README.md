@@ -12,7 +12,7 @@ Dénombrement des polycubes de n cubes. Aucune formule connue ; objectif à term
 
 ## Ce qui existe
 
-Algorithme de Redelmeier généralisé au réseau cubique, compte les polycubes **fixes**. Les 3 derniers cubes sont comptés en formule fermée (dérivation dans la doc de `count_final_extensions`, `src/redelmeier.rs`), sans visiter les polycubes ; les sommes de la formule (`FrontierTallies`) sont tenues à jour à chaque changement d'état d'une cellule, donc le comptage final est en O(1) par nœud. Parallélisme : chaque thread parcourt l'arbre jusqu'à la taille 6 et réclame les sous-arbres (23 502) dans un registre atomique partagé ; aucune dépendance externe.
+Algorithme de Redelmeier généralisé au réseau cubique, compte les polycubes **fixes**. Les 4 derniers cubes sont comptés en formule fermée, sans visiter les polycubes : un balayage de la frontière (cellules non-essayées, leurs voisins libres, chemins de 2 pas, carrés unité) fournit les sommes de `FrontierSums`, dont `extension_counts` déduit le nombre d'ajouts de 1 à 4 cubes (`src/redelmeier.rs`). Formule dérivée ici, validée seulement par les tests. Parallélisme : chaque thread parcourt l'arbre jusqu'à la taille 6 et réclame les sous-arbres (23 502) dans un registre atomique partagé ; aucune dépendance externe.
 
 ```bash
 cargo run --release -- 13
@@ -32,6 +32,15 @@ Validé contre A001931 pour n = 1 à 10 par les tests (`cargo test`), pour chaqu
 | sommes de frontière incrémentales, 8 threads | 15 | 217 411 781 475 | 35,8 s | 6 068,1 M/s |
 | sommes de frontière incrémentales, 8 threads | 16 | 1 652 486 236 230 | 200,3 s | 8 250,6 M/s |
 
+Comparaison en temps CPU (machine chargée par d'autres calculs, temps mur non fiables), n = 15, 8 threads, 2 passes alternées :
+
+| version | temps CPU |
+|---|------:|
+| 3 cubes, sommes incrémentales | 129,3 s / 131,1 s |
+| 4 cubes, balayage de frontière | 93,4 s / 93,5 s |
+
+Gain ×1,4. n = 16 redonne 1 435 074 454 755.
+
 Référence externe (README de Thompson, M1 8 threads) : n = 15 en 10,7 s, n = 16 en 52 s.
 
 Machine : 8 threads matériels (`nproc`). Accélération mesurée ×4,5 sur 8 threads à n = 15.
@@ -42,7 +51,7 @@ Croissance d'environ ×7,6 par cube. n = 22 a demandé environ 10 jours sur 64 t
 
 ## Pistes
 
-1. Étendre la formule fermée à 4 cubes (le coût restant est la mise à jour des compteurs au dernier niveau de l'arbre).
+1. Alléger le balayage de frontière (jusqu'à 36 cellules lues par cellule non-essayée).
 2. Burnside sur les 24 rotations pour obtenir A000162 à partir des fixes.
 3. Profiler pour de bon : `perf` est bloqué sur cette machine (`perf_event_paranoid = 4`).
 

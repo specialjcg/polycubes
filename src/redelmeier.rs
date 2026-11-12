@@ -11,7 +11,7 @@ use std::thread;
 use crate::lattice::{Lattice, NEIGHBOUR_COUNT};
 
 /// Number of final cells counted in closed form instead of being enumerated.
-const CLOSED_FORM_CELL_COUNT: usize = 3;
+const CLOSED_FORM_CELL_COUNT: usize = 4;
 /// Size of the polycubes whose subtrees are shared out between threads.
 const FORK_CELL_COUNT: usize = 6;
 
@@ -114,26 +114,8 @@ struct Cell {
     untried_neighbour_count: u8,
 }
 
-/// Sums over the untried cells `u` and the free cells `f`, kept up to date at
-/// every state change so that the final extensions are counted in O(1).
-///
-/// `d(u)` is the number of free neighbours of `u`, `m(f)` the number of
-/// untried neighbours of `f` and `e(f)` its number of free neighbours.
-#[derive(Clone, Copy, Default)]
-struct FrontierTallies {
-    /// `sum d(u)`
-    free_neighbour_total: u64,
-    /// `sum C(d(u), 2)`
-    free_neighbour_pair_total: u64,
-    /// `sum C(m(f), 2)`
-    shared_free_neighbour_pair_total: u64,
-    /// `sum m(f) * e(f)`
-    two_step_path_total: u64,
-}
-
 struct Enumerator<'claims> {
     cells: Vec<Cell>,
-    tallies: FrontierTallies,
     /// Append-only queue of candidate cells; each recursion level owns a suffix.
     untried_cells: Vec<usize>,
     neighbour_offsets: [isize; NEIGHBOUR_COUNT],
@@ -165,7 +147,6 @@ impl<'claims> Enumerator<'claims> {
             .collect();
         let mut enumerator = Self {
             cells,
-            tallies: FrontierTallies::default(),
             untried_cells: Vec::new(),
             neighbour_offsets: lattice.neighbour_offsets(),
             counts: vec![0; max_cell_count],
@@ -186,7 +167,6 @@ impl<'claims> Enumerator<'claims> {
         }
         let untried_end = self.untried_cells.len();
         let cell_count = placed_cell_count + 1;
-        let tallies_before_level = self.tallies;
         for untried_index in first_untried..untried_end {
             let cell = self.untried_cells[untried_index];
             self.counts[cell_count - 1] += 1;
@@ -199,16 +179,13 @@ impl<'claims> Enumerator<'claims> {
             if cell_count == FORK_CELL_COUNT && !self.claims_next_subtree() {
                 continue;
             }
-            let tallies_before_subtree = self.tallies;
             self.queue_free_neighbours(cell);
             self.extend(untried_index + 1, cell_count);
             self.free_cells_queued_after(untried_end);
-            self.tallies = tallies_before_subtree;
         }
         for untried_index in (first_untried..untried_end).rev() {
             self.reopen(self.untried_cells[untried_index]);
         }
-        self.tallies = tallies_before_level;
     }
 
     fn claims_next_subtree(&mut self) -> bool {
@@ -220,31 +197,59 @@ impl<'claims> Enumerator<'claims> {
         claims.try_claim(subtree_rank)
     }
 
-    /// Counts, without visiting them, every way to add one, two or three
-    /// cells to the current polycube.
-    ///
-    /// A set of added cells is valid when each cell is untried, or free and
-    /// linked to an untried cell of the set through free cells of the set.
-    /// With `U` the untried cells and the notations of [`FrontierTallies`]:
-    ///
-    /// - one cell: `|U|`
-    /// - two cells: `C(|U|, 2) + sum d(u)`
-    /// - three cells: `C(|U|, 3)` (all untried)
-    ///   `+ (|U| - 1) * sum d(u) - sum C(m(f), 2)` (two untried, one free)
-    ///   `+ sum C(d(u), 2) + sum m(f) * e(f)` (one untried, two free; the
-    ///   lattice is bipartite, so a free cell two steps away from `u` is
-    ///   never also a neighbour of `u`).
+    /// Counts, without visiting them, every way to add one to four cells to
+    /// the current polycube.
     fn count_final_extensions(&mut self, first_untried: usize, placed_cell_count: usize) {
-        let untried_count = (self.untried_cells.len() - first_untried) as u64;
-        let tallies = self.tallies;
-        let two_untried_one_free = untried_count.saturating_sub(1) * tallies.free_neighbour_total
-            - tallies.shared_free_neighbour_pair_total;
-        let one_untried_two_free = tallies.free_neighbour_pair_total + tallies.two_step_path_total;
-        self.counts[placed_cell_count] += untried_count;
-        self.counts[placed_cell_count + 1] +=
-            choose_two(untried_count) + tallies.free_neighbour_total;
-        self.counts[placed_cell_count + 2] +=
-            choose_three(untried_count) + two_untried_one_free + one_untried_two_free;
+        let extension_counts = self.frontier_sums(first_untried).extension_counts();
+        let final_counts = &mut self.counts[placed_cell_count..];
+        for (final_count, extension_count) in final_counts.iter_mut().zip(extension_counts) {
+            *final_count += extension_count;
+        }
+    }
+
+    fn frontier_sums(&self, first_untried: usize) -> FrontierSums {
+        let untried_cells = &self.untried_cells[first_untried..];
+        let mut sums = FrontierSums {
+            untried_count: untried_cells.len() as i64,
+            ..FrontierSums::default()
+        };
+        for &untried_cell in untried_cells {
+            let untried = self.cells[untried_cell];
+            sums.add_untried_cell(untried);
+            for first_offset in self.neighbour_offsets {
+                let free_cell = untried_cell.wrapping_add_signed(first_offset);
+                let free = self.cells[free_cell];
+                if free.state != CellState::Free {
+                    continue;
+                }
+                sums.add_untried_free_edge(untried, free);
+                for second_offset in self.neighbour_offsets {
+                    let path_end_cell = free_cell.wrapping_add_signed(second_offset);
+                    let path_end = self.cells[path_end_cell];
+                    let is_straight = second_offset == first_offset;
+                    // When the path turns, it spans a unit square whose fourth
+                    // corner is the other neighbour of the untried cell.
+                    let fourth_corner = self.cells[untried_cell.wrapping_add_signed(second_offset)];
+                    let is_fourth_corner_free = fourth_corner.state == CellState::Free;
+                    match path_end.state {
+                        CellState::Free => {
+                            sums.add_two_step_path(path_end);
+                            if !is_straight && is_fourth_corner_free {
+                                sums.twice_single_untried_square_count += 1;
+                            }
+                        }
+                        CellState::Untried => {
+                            let is_turning = !is_straight && path_end_cell != untried_cell;
+                            if is_turning && is_fourth_corner_free {
+                                sums.four_times_double_untried_square_count += 1;
+                            }
+                        }
+                        CellState::Closed => {}
+                    }
+                }
+            }
+        }
+        sums
     }
 
     fn queue_free_neighbours(&mut self, cell: usize) {
@@ -258,41 +263,18 @@ impl<'claims> Enumerator<'claims> {
 
     /// Turns a free cell into an untried one.
     fn queue(&mut self, free_cell: usize) {
-        let tallies = &mut self.tallies;
-        let queued = &mut self.cells[free_cell];
-        let free_neighbour_count = u64::from(queued.free_neighbour_count);
-        let untried_neighbour_count = u64::from(queued.untried_neighbour_count);
-        queued.state = CellState::Untried;
-        tallies.shared_free_neighbour_pair_total -= choose_two(untried_neighbour_count);
-        tallies.two_step_path_total -= untried_neighbour_count * free_neighbour_count;
-        tallies.free_neighbour_total += free_neighbour_count;
-        tallies.free_neighbour_pair_total += choose_two(free_neighbour_count);
+        self.cells[free_cell].state = CellState::Untried;
         for offset in self.neighbour_offsets {
             let neighbour = &mut self.cells[free_cell.wrapping_add_signed(offset)];
-            let untried_neighbours_before = u64::from(neighbour.untried_neighbour_count);
             neighbour.untried_neighbour_count += 1;
             neighbour.free_neighbour_count -= 1;
-            let free_neighbours_after = u64::from(neighbour.free_neighbour_count);
-            match neighbour.state {
-                CellState::Free => {
-                    tallies.shared_free_neighbour_pair_total += untried_neighbours_before;
-                    tallies.two_step_path_total += free_neighbours_after;
-                    tallies.two_step_path_total -= untried_neighbours_before;
-                }
-                CellState::Untried => {
-                    tallies.free_neighbour_total -= 1;
-                    tallies.free_neighbour_pair_total -= free_neighbours_after;
-                }
-                CellState::Closed => {}
-            }
         }
         self.untried_cells.push(free_cell);
     }
 
     /// Undoes [`Self::queue`] for every cell queued after `untried_end`.
-    /// Tallies are restored by the caller from a snapshot.
     fn free_cells_queued_after(&mut self, untried_end: usize) {
-        for freed_cell in self.untried_cells.drain(untried_end..).rev() {
+        for freed_cell in self.untried_cells.drain(untried_end..) {
             self.cells[freed_cell].state = CellState::Free;
             for offset in self.neighbour_offsets {
                 let neighbour = &mut self.cells[freed_cell.wrapping_add_signed(offset)];
@@ -304,37 +286,186 @@ impl<'claims> Enumerator<'claims> {
 
     /// Turns an untried cell into a closed one.
     fn close(&mut self, untried_cell: usize) {
-        let tallies = &mut self.tallies;
-        let closed = &mut self.cells[untried_cell];
-        let free_neighbour_count = u64::from(closed.free_neighbour_count);
-        closed.state = CellState::Closed;
-        tallies.free_neighbour_total -= free_neighbour_count;
-        tallies.free_neighbour_pair_total -= choose_two(free_neighbour_count);
+        self.cells[untried_cell].state = CellState::Closed;
         for offset in self.neighbour_offsets {
-            let neighbour = &mut self.cells[untried_cell.wrapping_add_signed(offset)];
-            neighbour.untried_neighbour_count -= 1;
-            if neighbour.state == CellState::Free {
-                tallies.shared_free_neighbour_pair_total -=
-                    u64::from(neighbour.untried_neighbour_count);
-                tallies.two_step_path_total -= u64::from(neighbour.free_neighbour_count);
-            }
+            self.cells[untried_cell.wrapping_add_signed(offset)].untried_neighbour_count -= 1;
         }
     }
 
-    /// Undoes [`Self::close`]. Tallies are restored by the caller from a snapshot.
+    /// Undoes [`Self::close`].
     fn reopen(&mut self, closed_cell: usize) {
         self.cells[closed_cell].state = CellState::Untried;
         for offset in self.neighbour_offsets {
-            let neighbour = &mut self.cells[closed_cell.wrapping_add_signed(offset)];
-            neighbour.untried_neighbour_count += 1;
+            self.cells[closed_cell.wrapping_add_signed(offset)].untried_neighbour_count += 1;
         }
     }
 }
 
-fn choose_two(item_count: u64) -> u64 {
-    item_count * item_count.saturating_sub(1) / 2
+/// Sums over the frontier of a polycube from which the number of ways to add
+/// up to four cells is derived.
+///
+/// Notations: `U` the untried cells, `d(u)` the number of free neighbours of
+/// the untried cell `u`, `m(f)` the number of untried neighbours of the free
+/// cell `f`, `e(f)` its number of free neighbours. An "edge" is an untried
+/// cell with one of its free neighbours; a "path" is an edge prolonged by a
+/// free neighbour of its free cell.
+#[derive(Default)]
+struct FrontierSums {
+    /// `|U|`
+    untried_count: i64,
+    /// `sum d(u)`, which is also `sum m(f)`
+    edge_count: i64,
+    /// `sum C(d(u), 2)`
+    free_pairs_around_untried: i64,
+    /// `sum C(d(u), 3)`
+    free_triples_around_untried: i64,
+    /// `sum over edges of m(f) - 1`, that is `2 * sum C(m(f), 2)`
+    twice_untried_pairs_around_free: i64,
+    /// `sum over edges of C(m(f) - 1, 2)`, that is `3 * sum C(m(f), 3)`
+    thrice_untried_triples_around_free: i64,
+    /// `sum over edges of e(f)`, that is `sum m(f) * e(f)`
+    path_count: i64,
+    /// `sum over edges of C(e(f), 2)`
+    forked_path_count: i64,
+    /// `sum over edges of e(f) * (m(f) - 1)`
+    twice_doubly_rooted_path_count: i64,
+    /// `sum over edges of d(u) * m(f)`
+    edge_degree_product_total: i64,
+    /// `sum over edges of d(u) * e(f)`
+    edge_free_degree_product_total: i64,
+    /// `sum over paths of e(g)`, `g` being the far end of the path
+    path_end_free_neighbour_total: i64,
+    /// `sum over paths of m(g)`
+    path_end_untried_neighbour_total: i64,
+    /// Unit squares with exactly one untried corner and three free ones, counted twice.
+    twice_single_untried_square_count: i64,
+    /// Unit squares with two opposite untried corners and two free ones, counted four times.
+    four_times_double_untried_square_count: i64,
 }
 
-fn choose_three(item_count: u64) -> u64 {
-    choose_two(item_count) * item_count.saturating_sub(2) / 3
+impl FrontierSums {
+    fn add_untried_cell(&mut self, untried: Cell) {
+        let free_neighbour_count = i64::from(untried.free_neighbour_count);
+        self.edge_count += free_neighbour_count;
+        self.free_pairs_around_untried += choose_two(free_neighbour_count);
+        self.free_triples_around_untried += choose_three(free_neighbour_count);
+    }
+
+    fn add_untried_free_edge(&mut self, untried: Cell, free: Cell) {
+        let untried_degree = i64::from(untried.free_neighbour_count);
+        let other_untried_count = i64::from(free.untried_neighbour_count) - 1;
+        let free_neighbour_count = i64::from(free.free_neighbour_count);
+        self.twice_untried_pairs_around_free += other_untried_count;
+        self.thrice_untried_triples_around_free += choose_two(other_untried_count);
+        self.path_count += free_neighbour_count;
+        self.forked_path_count += choose_two(free_neighbour_count);
+        self.twice_doubly_rooted_path_count += free_neighbour_count * other_untried_count;
+        self.edge_degree_product_total += untried_degree * (other_untried_count + 1);
+        self.edge_free_degree_product_total += untried_degree * free_neighbour_count;
+    }
+
+    fn add_two_step_path(&mut self, path_end: Cell) {
+        self.path_end_free_neighbour_total += i64::from(path_end.free_neighbour_count);
+        self.path_end_untried_neighbour_total += i64::from(path_end.untried_neighbour_count);
+    }
+
+    /// Number of ways to add one, two, three and four cells.
+    ///
+    /// A set of added cells is valid when each cell is untried, or free and
+    /// linked to an untried cell of the set through free cells of the set.
+    /// Sets are counted by number of untried cells they contain. The lattice
+    /// is bipartite: two cells two steps apart are never neighbours, which
+    /// keeps the cases below disjoint.
+    fn extension_counts(&self) -> [u64; CLOSED_FORM_CELL_COUNT] {
+        [
+            self.untried_count,
+            self.two_cell_extension_count(),
+            self.three_cell_extension_count(),
+            self.four_cell_extension_count(),
+        ]
+        .map(|extension_count| {
+            u64::try_from(extension_count).expect("extension counts are never negative")
+        })
+    }
+
+    fn untried_pairs_around_free(&self) -> i64 {
+        self.twice_untried_pairs_around_free / 2
+    }
+
+    fn two_cell_extension_count(&self) -> i64 {
+        choose_two(self.untried_count) + self.edge_count
+    }
+
+    fn three_cell_extension_count(&self) -> i64 {
+        let all_untried = choose_three(self.untried_count);
+        // Pairs of untried cells with a free neighbour of either.
+        let two_untried =
+            (self.untried_count - 1) * self.edge_count - self.untried_pairs_around_free();
+        // Two free neighbours of the untried cell, or a path.
+        let one_untried = self.free_pairs_around_untried + self.path_count;
+        all_untried + two_untried + one_untried
+    }
+
+    fn four_cell_extension_count(&self) -> i64 {
+        choose_four(self.untried_count)
+            + self.three_untried_one_free_count()
+            + self.two_untried_two_free_count()
+            + self.one_untried_three_free_count()
+    }
+
+    /// Triples of untried cells hitting the untried neighbours of a free
+    /// cell, by inclusion-exclusion on those neighbours.
+    fn three_untried_one_free_count(&self) -> i64 {
+        choose_two(self.untried_count - 1) * self.edge_count
+            - (self.untried_count - 2) * self.untried_pairs_around_free()
+            + self.thrice_untried_triples_around_free / 3
+    }
+
+    fn two_untried_two_free_count(&self) -> i64 {
+        let untried_count = self.untried_count;
+        let untried_degree_square_total = self.twice_untried_pairs_around_free + self.edge_count;
+        let double_untried_square_count = self.four_times_double_untried_square_count / 4;
+        // Both free cells next to an untried cell of the pair: for free cells
+        // with a, b untried neighbours of which c are shared, the number of
+        // untried pairs hitting both is a*b - c*(a+b) + c*(2|U|-1+c)/2.
+        let both_free_next_to_untried =
+            (self.edge_count * self.edge_count - untried_degree_square_total) / 2
+                - (self.edge_degree_product_total - untried_degree_square_total)
+                + untried_count * self.free_pairs_around_untried
+                + double_untried_square_count;
+        // One free cell next to the pair, the other only next to that free
+        // cell: a*(|U|-1) - C(a,2) - a*b untried pairs per ordered free pair.
+        let free_cells_in_a_row = (untried_count - 1) * self.path_count
+            - self.twice_doubly_rooted_path_count / 2
+            - self.path_end_untried_neighbour_total;
+        both_free_next_to_untried + free_cells_in_a_row
+    }
+
+    fn one_untried_three_free_count(&self) -> i64 {
+        let single_untried_square_count = self.twice_single_untried_square_count / 2;
+        // Two free neighbours of the untried cell, plus a free neighbour of
+        // either; a square's far corner is a neighbour of both.
+        let two_branches_one_prolonged =
+            self.edge_free_degree_product_total - self.path_count - single_untried_square_count;
+        // One free neighbour of the untried cell, then a three-cell path that
+        // does not come back next to the untried cell through a square.
+        let three_cell_paths =
+            self.path_end_free_neighbour_total - self.path_count - 2 * single_untried_square_count;
+        self.free_triples_around_untried
+            + two_branches_one_prolonged
+            + self.forked_path_count
+            + three_cell_paths
+    }
+}
+
+fn choose_two(item_count: i64) -> i64 {
+    item_count * (item_count - 1) / 2
+}
+
+fn choose_three(item_count: i64) -> i64 {
+    choose_two(item_count) * (item_count - 2) / 3
+}
+
+fn choose_four(item_count: i64) -> i64 {
+    choose_three(item_count) * (item_count - 3) / 4
 }
