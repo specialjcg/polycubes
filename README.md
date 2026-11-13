@@ -49,9 +49,19 @@ Gain ×1,4. n = 16 redonne 1 435 074 454 755.
 
 Partie symétrique (Burnside), 1 thread, machine chargée : n = 14 en 11 s, n = 16 en 82 s, contre 197 s sur 8 threads pour les fixes à n = 16. Croissance d'environ ×3 par cube, donc négligeable devant les fixes quand n grandit.
 
+Machine calme (2026-11-13), 8 threads, fixes seuls : n = 14 en 1,7 s, n = 15 en 12,8 s.
+
 Référence externe (README de Thompson, M1 8 threads) : n = 15 en 10,7 s, n = 16 en 52 s.
 
 Machine : 8 threads matériels (`nproc`). Accélération mesurée ×4,5 sur 8 threads à n = 15.
+
+## Profil
+
+`perf` est bloqué (`perf_event_paranoid = 4`). Deux mesures à la place, à n = 15 :
+
+- Balayage neutralisé (résultats faux, temps seul) : 10,5 s CPU pour le parcours d'arbre contre 76 s de plus pour le balayage → le balayage de frontière représente environ 85 % du temps.
+- Échantillonnage avec `gdb` (20 interruptions, 160 relevés de threads actifs) : environ 80 % des relevés dans la boucle interne des chemins de `frontier_sums` (lecture de la cellule en bout de chemin, tests d'état).
+- Statistiques de frontière à n = 13 : 7,2 cellules non-essayées par nœud final, 3,7 voisins libres par cellule non-essayée, 1,47 voisine non-essayée par cellule libre de la frontière. Soit environ 200 itérations par nœud final.
 
 ## Limite
 
@@ -69,4 +79,6 @@ TDD (rouge → vert → refactor), `cargo fmt`, `cargo clippy --all-targets -- -
 
 ## Essais rejetés
 
-- Mise à jour des sommes sans branchement (multiplication par un masque d'état au lieu d'un `match`) : n = 15 en 58,9 s contre 35,8 s. Une seule mesure de chaque côté.
+- Mise à jour des sommes sans branchement (multiplication par un masque d'état au lieu d'un `match`) : n = 15 en 58,9 s contre 35,8 s. Une seule mesure de chaque côté, machine chargée.
+- Balayage : lire une seule fois les 6 voisins de la cellule non-essayée, sauter les cellules sans voisin libre et les impasses : n = 15 en 13,6 s et 13,8 s contre 12,8 s. Pas de gain.
+- Balayage : boucle interne des chemins sans branchement : n = 15 en 18,5 s contre 12,8 s (seconde mesure à 20,7 s, machine redevenue chargée).
