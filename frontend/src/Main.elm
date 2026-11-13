@@ -1,140 +1,118 @@
 module Main exposing (main)
 
-{-| Draws fixed polycubes uniformly at random and shows them in 3D.
+{-| Animated views on polycubes. Each page is a module of `Page`, holding its
+own state, messages and view.
 -}
 
-import Backend exposing (DrawnPolycube)
+import Backend
 import Browser
-import Html exposing (Html, button, div, h1, input, label, main_, p, text)
+import Html exposing (Html, button, h1, main_, nav, text)
 import Html.Attributes as Attr
-import Html.Events exposing (onClick, onInput)
-import Scene
+import Html.Events exposing (onClick)
+import Page.Draw
+import Page.Growth
 
 
-smallestCellCount : Int
-smallestCellCount =
-    1
-
-
-{-| Must match `MAX_INTERACTIVE_CELL_COUNT` of the backend.
--}
-largestCellCount : Int
-largestCellCount =
-    12
-
-
-initialCellCount : Int
-initialCellCount =
-    8
+type Page
+    = GrowthPage
+    | DrawPage
 
 
 type alias Model =
-    { cellCount : Int
-    , draw : Draw
+    { shownPage : Page
+    , growth : Page.Growth.Model
+    , draw : Page.Draw.Model
     }
-
-
-type Draw
-    = Drawing
-    | Drawn DrawnPolycube
-    | Failed String
 
 
 type Msg
     = BackendReady
-    | CellCountChosen String
-    | DrawRequested
-    | DrawFinished (Result String DrawnPolycube)
+    | PageChosen Page
+    | GrowthMsg Page.Growth.Msg
+    | DrawMsg Page.Draw.Msg
 
 
 main : Program () Model Msg
 main =
     Browser.element
-        { init = \_ -> ( { cellCount = initialCellCount, draw = Drawing }, Cmd.none )
+        { init = \_ -> ( init, Cmd.none )
         , update = update
         , view = view
         , subscriptions = subscriptions
         }
 
 
-subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.batch
-        [ Backend.ready (\_ -> BackendReady)
-        , Backend.drawFinished DrawFinished
-        ]
-
-
-requestDraw : Int -> ( Model, Cmd Msg )
-requestDraw cellCount =
-    ( { cellCount = cellCount, draw = Drawing }, Backend.requestDraw cellCount )
+init : Model
+init =
+    { shownPage = GrowthPage
+    , growth = Page.Growth.init
+    , draw = Page.Draw.init
+    }
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         BackendReady ->
-            requestDraw model.cellCount
+            let
+                ( growth, growthCmd ) =
+                    Page.Growth.start model.growth
 
-        CellCountChosen sliderValue ->
-            requestDraw (String.toInt sliderValue |> Maybe.withDefault model.cellCount)
+                ( draw, drawCmd ) =
+                    Page.Draw.start model.draw
+            in
+            ( { model | growth = growth, draw = draw }
+            , Cmd.batch [ Cmd.map GrowthMsg growthCmd, Cmd.map DrawMsg drawCmd ]
+            )
 
-        DrawRequested ->
-            requestDraw model.cellCount
+        PageChosen page ->
+            ( { model | shownPage = page }, Cmd.none )
 
-        DrawFinished (Ok drawnPolycube) ->
-            ( { model | draw = Drawn drawnPolycube }, Cmd.none )
+        GrowthMsg growthMsg ->
+            let
+                ( growth, growthCmd ) =
+                    Page.Growth.update growthMsg model.growth
+            in
+            ( { model | growth = growth }, Cmd.map GrowthMsg growthCmd )
 
-        DrawFinished (Err reason) ->
-            ( { model | draw = Failed reason }, Cmd.none )
+        DrawMsg drawMsg ->
+            let
+                ( draw, drawCmd ) =
+                    Page.Draw.update drawMsg model.draw
+            in
+            ( { model | draw = draw }, Cmd.map DrawMsg drawCmd )
+
+
+subscriptions : Model -> Sub Msg
+subscriptions model =
+    Sub.batch
+        [ Backend.ready (\_ -> BackendReady)
+        , Sub.map GrowthMsg (Page.Growth.subscriptions model.growth)
+        , Sub.map DrawMsg Page.Draw.subscriptions
+        ]
 
 
 view : Model -> Html Msg
 view model =
     main_ []
-        [ h1 [] [ text "Polycubes tirés uniformément" ]
-        , viewControls model.cellCount
-        , viewDraw model.draw
-        ]
-
-
-viewControls : Int -> Html Msg
-viewControls cellCount =
-    div [ Attr.class "controls" ]
-        [ label []
-            [ text ("Cubes : " ++ String.fromInt cellCount)
-            , input
-                [ Attr.type_ "range"
-                , Attr.min (String.fromInt smallestCellCount)
-                , Attr.max (String.fromInt largestCellCount)
-                , Attr.value (String.fromInt cellCount)
-                , onInput CellCountChosen
-                ]
-                []
+        [ h1 [] [ text "Polycubes" ]
+        , nav []
+            [ viewPageButton model.shownPage GrowthPage "Croissance biaisée contre tirage uniforme"
+            , viewPageButton model.shownPage DrawPage "Tirage uniforme"
             ]
-        , button [ onClick DrawRequested ] [ text "Tirer un autre" ]
+        , case model.shownPage of
+            GrowthPage ->
+                Html.map GrowthMsg (Page.Growth.view model.growth)
+
+            DrawPage ->
+                Html.map DrawMsg (Page.Draw.view model.draw)
         ]
 
 
-viewDraw : Draw -> Html Msg
-viewDraw draw =
-    case draw of
-        Drawing ->
-            p [ Attr.class "status" ] [ text "Tirage en cours…" ]
-
-        Drawn drawnPolycube ->
-            div []
-                [ p [ Attr.class "status" ]
-                    [ text
-                        ("Polycube n° "
-                            ++ drawnPolycube.rank
-                            ++ " parmi "
-                            ++ drawnPolycube.polycubeCount
-                            ++ " polycubes fixes"
-                        )
-                    ]
-                , Scene.view drawnPolycube.cells
-                ]
-
-        Failed reason ->
-            p [ Attr.class "status error" ] [ text ("Tirage impossible : " ++ reason) ]
+viewPageButton : Page -> Page -> String -> Html Msg
+viewPageButton shownPage page title =
+    button
+        [ onClick (PageChosen page)
+        , Attr.classList [ ( "tab", True ), ( "shown", page == shownPage ) ]
+        ]
+        [ text title ]

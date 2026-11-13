@@ -3,19 +3,31 @@
 const app = Elm.Main.init({ node: document.getElementById("app") });
 const invoke = window.__TAURI__?.core?.invoke;
 
-app.ports.requestDraw.subscribe(async (cellCount) => {
-  if (!invoke) {
-    app.ports.drawFinishedPort.send({
-      error: "moteur de calcul absent, ouvrir cette page depuis l'application de bureau",
-    });
-    return;
-  }
-  try {
-    const drawn = await invoke("draw_uniform_polycube", { cellCount });
-    app.ports.drawFinishedPort.send({ drawn });
-  } catch (error) {
-    app.ports.drawFinishedPort.send({ error: String(error) });
-  }
-});
+// Each request port carries a cell count; the matching result port receives
+// `{ ok: value }` or `{ error: reason }`.
+const relayedCommands = [
+  { command: "draw_uniform_polycube", request: "requestDraw", result: "drawFinishedPort" },
+  {
+    command: "compare_growths",
+    request: "requestGrowthComparison",
+    result: "growthComparisonFinishedPort",
+  },
+];
+
+for (const { command, request, result } of relayedCommands) {
+  app.ports[request].subscribe(async (cellCount) => {
+    if (!invoke) {
+      app.ports[result].send({
+        error: "moteur de calcul absent, ouvrir cette page depuis l'application de bureau",
+      });
+      return;
+    }
+    try {
+      app.ports[result].send({ ok: await invoke(command, { cellCount }) });
+    } catch (error) {
+      app.ports[result].send({ error: String(error) });
+    }
+  });
+}
 
 app.ports.ready.send(null);

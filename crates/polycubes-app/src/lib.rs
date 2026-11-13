@@ -4,10 +4,12 @@
 //! serialise the result.
 
 pub mod drawing;
+pub mod growth;
 
 use std::sync::Mutex;
 
 use drawing::{CellCount, DrawnPolycube, PolycubeDrawer};
+use growth::GrowthComparison;
 
 /// Draws a fixed polycube of `cell_count` cells uniformly at random.
 #[tauri::command(async)]
@@ -26,6 +28,26 @@ fn draw_uniform_polycube(
         .map_err(|error| error.to_string())
 }
 
+/// Builds a polycube by random neighbour growth and draws another one
+/// uniformly, both of `cell_count` cells.
+#[tauri::command(async)]
+fn compare_growths(
+    cell_count: usize,
+    drawer: tauri::State<'_, Mutex<PolycubeDrawer>>,
+) -> Result<GrowthComparison, String> {
+    let cell_count = CellCount::try_from(cell_count).map_err(|error| error.to_string())?;
+    let mut drawer = drawer
+        .lock()
+        .map_err(|_| "a previous draw failed, restart the application".to_owned())?;
+    growth::compare_growths(
+        &mut drawer,
+        cell_count,
+        |polycube_count| rand::random_range(0..polycube_count),
+        |candidate_count| rand::random_range(0..candidate_count),
+    )
+    .map_err(|error| error.to_string())
+}
+
 /// Runs the desktop application until its window is closed.
 ///
 /// # Panics
@@ -34,7 +56,10 @@ fn draw_uniform_polycube(
 pub fn run() {
     tauri::Builder::default()
         .manage(Mutex::new(PolycubeDrawer::default()))
-        .invoke_handler(tauri::generate_handler![draw_uniform_polycube])
+        .invoke_handler(tauri::generate_handler![
+            draw_uniform_polycube,
+            compare_growths
+        ])
         .run(tauri::generate_context!())
         .expect("the desktop application failed to start");
 }

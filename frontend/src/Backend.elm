@@ -1,4 +1,13 @@
-port module Backend exposing (DrawnPolycube, drawFinished, ready, requestDraw)
+port module Backend exposing
+    ( DrawnPolycube
+    , GrownPolycube
+    , GrowthComparison
+    , drawFinished
+    , growthComparisonFinished
+    , ready
+    , requestDraw
+    , requestGrowthComparison
+    )
 
 {-| Calls to the Rust backend, relayed by `public/backend.js`.
 -}
@@ -19,6 +28,24 @@ type alias DrawnPolycube =
     }
 
 
+{-| A polycube whose cells are listed in the order they appear, with the
+side lengths of the smallest box holding it.
+-}
+type alias GrownPolycube =
+    { cells : Polycube
+    , boundingBox : List Int
+    }
+
+
+{-| Two polycubes of the same size: one grown by picking a free neighbour at
+random, one drawn uniformly.
+-}
+type alias GrowthComparison =
+    { neighbourGrowth : GrownPolycube
+    , uniformDraw : GrownPolycube
+    }
+
+
 {-| Fires once `public/backend.js` listens to the requests. A request sent
 earlier, from `init` for instance, would be lost.
 -}
@@ -33,27 +60,39 @@ port requestDraw : Int -> Cmd msg
 port drawFinishedPort : (Decode.Value -> msg) -> Sub msg
 
 
+{-| Asks for a growth comparison between polycubes of the given size.
+-}
+port requestGrowthComparison : Int -> Cmd msg
+
+
+port growthComparisonFinishedPort : (Decode.Value -> msg) -> Sub msg
+
+
 drawFinished : (Result String DrawnPolycube -> msg) -> Sub msg
 drawFinished toMsg =
-    drawFinishedPort (decodeDrawResult >> toMsg)
+    drawFinishedPort (decodeResult drawnPolycubeDecoder >> toMsg)
 
 
-decodeDrawResult : Decode.Value -> Result String DrawnPolycube
-decodeDrawResult value =
-    case Decode.decodeValue drawResultDecoder value of
-        Ok drawResult ->
-            drawResult
+growthComparisonFinished : (Result String GrowthComparison -> msg) -> Sub msg
+growthComparisonFinished toMsg =
+    growthComparisonFinishedPort (decodeResult growthComparisonDecoder >> toMsg)
+
+
+decodeResult : Decoder value -> Decode.Value -> Result String value
+decodeResult valueDecoder json =
+    let
+        resultDecoder =
+            Decode.oneOf
+                [ Decode.field "ok" valueDecoder |> Decode.map Ok
+                , Decode.field "error" Decode.string |> Decode.map Err
+                ]
+    in
+    case Decode.decodeValue resultDecoder json of
+        Ok result ->
+            result
 
         Err decodeError ->
             Err (Decode.errorToString decodeError)
-
-
-drawResultDecoder : Decoder (Result String DrawnPolycube)
-drawResultDecoder =
-    Decode.oneOf
-        [ Decode.field "drawn" drawnPolycubeDecoder |> Decode.map Ok
-        , Decode.field "error" Decode.string |> Decode.map Err
-        ]
 
 
 drawnPolycubeDecoder : Decoder DrawnPolycube
@@ -62,3 +101,17 @@ drawnPolycubeDecoder =
         (Decode.field "rank" Decode.string)
         (Decode.field "polycubeCount" Decode.string)
         (Decode.field "cells" (Decode.list Polycube.cellDecoder))
+
+
+growthComparisonDecoder : Decoder GrowthComparison
+growthComparisonDecoder =
+    Decode.map2 GrowthComparison
+        (Decode.field "neighbourGrowth" grownPolycubeDecoder)
+        (Decode.field "uniformDraw" grownPolycubeDecoder)
+
+
+grownPolycubeDecoder : Decoder GrownPolycube
+grownPolycubeDecoder =
+    Decode.map2 GrownPolycube
+        (Decode.field "cells" (Decode.list Polycube.cellDecoder))
+        (Decode.field "boundingBox" (Decode.list Decode.int))

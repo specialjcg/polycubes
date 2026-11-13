@@ -1,4 +1,5 @@
-// <polycube-scene cells="[[x,y,z],...]"> : 3D view of a polycube.
+// <polycube-scene cells="[[x,y,z],...]" shown="n"> : 3D view of a polycube.
+// `shown` limits the view to the first n cells; without it all are shown.
 // The Elm application owns the state; this element only draws what its
 // `cells` attribute describes.
 import * as THREE from "three";
@@ -11,9 +12,11 @@ const CUBE_SIDE = 0.96;
 const FIELD_OF_VIEW_DEGREES = 40;
 const CAMERA_DIRECTION = new THREE.Vector3(1.2, 0.9, 1.6).normalize();
 const CAMERA_MARGIN = 1.15;
+const APPEARANCE_MILLISECONDS = 260;
+const SMALLEST_VISIBLE_SCALE = 0.001;
 
 class PolycubeScene extends HTMLElement {
-  static observedAttributes = ["cells"];
+  static observedAttributes = ["cells", "shown"];
 
   connectedCallback() {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -37,6 +40,7 @@ class PolycubeScene extends HTMLElement {
     this.fitToElement();
     this.showCells();
     this.renderer.setAnimationLoop(() => {
+      this.growAppearingCubes();
       this.controls.update();
       this.renderer.render(this.scene, this.camera);
     });
@@ -52,9 +56,14 @@ class PolycubeScene extends HTMLElement {
     this.renderer = null;
   }
 
-  attributeChangedCallback() {
-    if (this.renderer) {
+  attributeChangedCallback(name) {
+    if (!this.renderer) {
+      return;
+    }
+    if (name === "cells") {
       this.showCells();
+    } else {
+      this.showFirstCubes();
     }
   }
 
@@ -83,6 +92,36 @@ class PolycubeScene extends HTMLElement {
       this.cubes.add(buildCube(cell, placementIndex / Math.max(cells.length - 1, 1)));
     });
     this.frameCubes();
+    this.showFirstCubes();
+  }
+
+  // Hides the cubes beyond the `shown` attribute; a cube that becomes
+  // visible grows from nothing so that the eye catches where it lands.
+  showFirstCubes() {
+    const shownAttribute = this.getAttribute("shown");
+    const shownCount = shownAttribute === null ? Infinity : Number(shownAttribute);
+    this.cubes.children.forEach((cube, placementIndex) => {
+      const isShown = placementIndex < shownCount;
+      if (isShown && !cube.visible) {
+        cube.userData.appearedAt = performance.now();
+        cube.scale.setScalar(SMALLEST_VISIBLE_SCALE);
+      }
+      cube.visible = isShown;
+    });
+  }
+
+  growAppearingCubes() {
+    const now = performance.now();
+    for (const cube of this.cubes.children) {
+      if (cube.userData.appearedAt === undefined) {
+        continue;
+      }
+      const progress = Math.min((now - cube.userData.appearedAt) / APPEARANCE_MILLISECONDS, 1);
+      cube.scale.setScalar(Math.max(progress, SMALLEST_VISIBLE_SCALE));
+      if (progress === 1) {
+        delete cube.userData.appearedAt;
+      }
+    }
   }
 
   // Centres the polycube and backs the camera off far enough to see it all.
@@ -116,6 +155,7 @@ function buildCube([x, y, z], placementProgress) {
   // The lattice has z upwards, Three.js has y upwards: a quarter turn about
   // x, not an axis swap, so that mirror images are not exchanged.
   cube.position.set(x, z, -y);
+  cube.visible = false;
   return cube;
 }
 

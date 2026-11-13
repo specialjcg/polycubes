@@ -21,6 +21,13 @@ pub enum DrawError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct CellCount(usize);
 
+impl CellCount {
+    #[must_use]
+    pub fn get(self) -> usize {
+        self.0
+    }
+}
+
 impl TryFrom<usize> for CellCount {
     type Error = DrawError;
 
