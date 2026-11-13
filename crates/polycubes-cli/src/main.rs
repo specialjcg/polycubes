@@ -1,7 +1,7 @@
 use std::time::Instant;
 
 use anyhow::{Context, Result};
-use polycubes::{count_fixed_polycubes_in_parallel, one_sided_counts_from_fixed};
+use polycubes_core::{count_fixed_polycubes_in_parallel, one_sided_counts_from_fixed};
 
 const DEFAULT_MAX_CELL_COUNT: usize = 12;
 

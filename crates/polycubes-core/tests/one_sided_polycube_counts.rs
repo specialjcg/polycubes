@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 
-use polycubes::count_one_sided_polycubes;
+use polycubes_core::count_one_sided_polycubes;
 
 /// OEIS A000162, sizes 1 to 10.
 const KNOWN_ONE_SIDED_COUNTS: [u64; 10] = [1, 1, 2, 8, 29, 166, 1_023, 6_922, 48_311, 346_543];

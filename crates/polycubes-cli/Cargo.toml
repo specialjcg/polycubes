@@ -1,0 +1,12 @@
+[package]
+name = "polycubes-cli"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "polycubes"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+polycubes-core = { path = "../polycubes-core" }

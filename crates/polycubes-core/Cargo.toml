@@ -1,0 +1,4 @@
+[package]
+name = "polycubes-core"
+version.workspace = true
+edition.workspace = true

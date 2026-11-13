@@ -1,6 +1,6 @@
 use std::num::NonZeroUsize;
 
-use polycubes::{count_fixed_polycubes, count_fixed_polycubes_in_parallel};
+use polycubes_core::{count_fixed_polycubes, count_fixed_polycubes_in_parallel};
 
 /// OEIS A001931, sizes 1 to 10.
 const KNOWN_FIXED_COUNTS: [u64; 10] = [
