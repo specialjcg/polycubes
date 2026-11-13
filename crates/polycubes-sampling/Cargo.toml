@@ -1,0 +1,7 @@
+[package]
+name = "polycubes-sampling"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+polycubes-core = { path = "../polycubes-core" }

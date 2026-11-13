@@ -10,6 +10,10 @@ use std::thread;
 
 use crate::lattice::{Lattice, NEIGHBOUR_COUNT};
 
+mod cursor;
+
+pub use cursor::EnumerationCursor;
+
 /// Number of final cells counted in closed form instead of being enumerated.
 const CLOSED_FORM_CELL_COUNT: usize = 4;
 /// Size of the polycubes whose subtrees are shared out between threads.
@@ -172,7 +176,7 @@ impl<'claims> Enumerator<'claims> {
             self.counts[cell_count - 1] += 1;
             // Closed for this subtree and for the following siblings.
             self.close(cell);
-            // Only reachable when the maximum size is below the closed-form depth.
+            // Only reachable when the walk starts below the closed-form depth.
             if cell_count == self.max_cell_count {
                 continue;
             }

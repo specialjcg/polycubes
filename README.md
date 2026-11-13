@@ -26,6 +26,16 @@ Validé contre A001931 pour n = 1 à 10 par les tests (`cargo test`), pour chaqu
 
 Validé contre A000162 pour n = 1 à 10 par les tests. Le binaire redonne aussi a(11) à a(16) de la page OEIS (…, 7 859 514 470, 59 795 121 480), hors tests.
 
+**Tirage uniforme exact** (`crates/polycubes-sampling`) : `RankedPolycubes` associe à chaque rang de `0..count()` un polycube fixe distinct ; tirer un rang uniforme tire donc un polycube uniforme. La descente choisit à chaque nœud l'enfant dont le sous-arbre contient le rang, les tailles de sous-arbres venant du curseur `EnumerationCursor` du cœur (formule fermée comprise). Tests : pour n = 1 à 6, tous les rangs donnent des polycubes distincts, de la bonne taille, connexes, plus petite cellule à l'origine, et leur nombre est celui d'A001931 — donc une bijection.
+
+```bash
+cargo run --release -p polycubes-sampling --example draw -- 12 200000000
+```
+
+Coût d'un tirage, 1 thread, sans table de sous-arbres : n = 10 en 4 ms, n = 12 en 0,2 s, n = 13 en 1,3 s (une mesure chacun). Chaque tirage refait l'équivalent d'environ deux énumérations ; une table des sous-arbres peu profonds supprimerait ce coût.
+
+Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates/polycubes-cli` (binaire), `crates/polycubes-sampling` (tirage).
+
 ## Mesure
 
 | version | n max | polycubes comptés | temps | débit |

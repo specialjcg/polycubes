@@ -2,7 +2,8 @@
 
 pub(crate) const NEIGHBOUR_COUNT: usize = 6;
 
-pub(crate) type Coordinates = [i32; 3];
+/// Position (x, y, z) of a cell relative to the smallest cell of its polycube.
+pub type Coordinates = [i32; 3];
 
 /// Box large enough to hold any polycube grown from the origin, surrounded by
 /// one layer of forbidden cells so that neighbour lookups never leave the box.
