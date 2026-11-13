@@ -78,13 +78,15 @@ Le travail est proportionnel au nombre de nœuds finaux, A001931(n − 4). De n 
 | matériel | cœurs | durée (8 000 cœur-jours) | coût |
 |---|--:|--:|--:|
 | ce portable | 4 | ~5,5 ans | — |
-| `gpu-ollama` (48 cœurs d'après la note du vault) | 48 | ~170 jours | électricité |
+| `gpu-ollama` (mesuré, voir ci-dessous) | 24 | 210 à 315 jours | électricité |
 | 1 × Hetzner AX162 (EPYC 9454P) | 48 | ~170 jours | ~1 300 € HT |
 | 4 × Hetzner AX162 | 192 | ~42 jours | ~2 000 € HT |
 | AWS c7a.48xlarge, spot | 192 | ~42 jours | 3 000 à 3 800 $ |
 | AWS c7a.48xlarge, à la demande | 192 | ~42 jours | ~9 900 $ |
 
 Prix relevés par recherche web le 2026-11-13 : Hetzner AX162 199 €/mois + 79 à 100 € de mise en service ; c7a.48xlarge 9,85 $/h à la demande, 3 à 3,8 $/h en spot. Hypothèse non vérifiée : un cœur serveur vaut un cœur de ce portable. À mesurer sur la machine cible avant tout engagement.
+
+Mesure sur `gpu-ollama` (2026-11-13) : 2 × Xeon Gold 6146, 24 cœurs physiques, 48 threads. Fixes n = 13 sur 1 thread : 1,54 s, machine saturée par un autre calcul (charge 46). Même mesure sur ce portable chargé : 2,26 s. Un thread du Xeon vaut donc 1 à 1,5 thread du portable. Extrapolation : 1,54 s × A001931(19) / A001931(9) × (1 à 1,5) ÷ 48 threads = 210 à 315 jours, machine entièrement dédiée. Une seule mesure, courte, sous charge.
 
 Préalables absents du code : points de reprise sur disque, découpage en lots, vérification croisée du résultat (deux exécutions indépendantes ou somme de contrôle par lot).
 
