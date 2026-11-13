@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Polycubes</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.js",
+        "three/addons/": "./vendor/addons/"
+      }
+    }
+  </script>
+  <script type="module" src="polycube-scene.js"></script>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; background: #f3efe8; color: #2b241c; }
+    main { padding: 16px; max-width: 1100px; margin: 0 auto; }
+    h1 { font-weight: 600; margin: 0 0 12px; }
+    .controls { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+    .controls label { display: flex; gap: 12px; align-items: center; }
+    button { font: inherit; padding: 6px 14px; border: 1px solid #8a7a66; border-radius: 6px; background: #fffaf2; cursor: pointer; }
+    .status { margin: 12px 0; font-variant-numeric: tabular-nums; }
+    .error { color: #a3261a; }
+    polycube-scene { display: block; height: 560px; border: 1px solid #d8cfc0; border-radius: 8px; background: #fbf8f2; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  <script src="main.js"></script>
+  <script src="backend.js"></script>
+</body>
+</html>

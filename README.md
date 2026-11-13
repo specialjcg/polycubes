@@ -34,7 +34,22 @@ cargo run --release -p polycubes-sampling --example draw -- 12 200000000
 
 Coût d'un tirage, 1 thread, sans table de sous-arbres : n = 10 en 4 ms, n = 12 en 0,2 s, n = 13 en 1,3 s (une mesure chacun). Chaque tirage refait l'équivalent d'environ deux énumérations ; une table des sous-arbres peu profonds supprimerait ce coût.
 
-Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates/polycubes-cli` (binaire), `crates/polycubes-sampling` (tirage).
+Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates/polycubes-cli` (binaire), `crates/polycubes-sampling` (tirage), `crates/polycubes-app` (coque Tauri), `frontend/` (Elm + Three.js).
+
+**Application de bureau** (`crates/polycubes-app` + `frontend/`) : Tauri 2, interface Elm, rendu Three.js. Première vue : tirer uniformément un polycube fixe de 1 à 12 cubes et le faire tourner en 3D.
+
+```bash
+frontend/build.sh
+```
+
+```bash
+cargo run --release -p polycubes-app
+```
+
+- `crates/polycubes-app/src/drawing.rs` : seule logique de la coque (taille acceptée, mémoire par taille, rang fourni par l'appelant) ; la commande Tauri de `lib.rs` y ajoute le hasard.
+- `frontend/src` : `Main.elm` (page de tirage), `Backend.elm` (ports vers Rust), `Scene.elm` (élément `<polycube-scene>`), `Polycube.elm` (type et codage).
+- `frontend/public/polycube-scene.js` : élément personnalisé Three.js, piloté par son attribut `cells` ; Three.js est copié depuis `node_modules` par `build.sh`, sans CDN.
+- `frontend/public/backend.js` : relais des ports Elm vers `invoke`. Il émet `ready` une fois abonné : une demande envoyée depuis `init` serait perdue.
 
 ## Mesure
 

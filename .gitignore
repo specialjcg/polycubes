@@ -1,1 +1,6 @@
 /target
+/frontend/node_modules
+/frontend/elm-stuff
+/frontend/public/main.js
+/frontend/public/vendor
+/crates/polycubes-app/gen

@@ -1,0 +1,22 @@
+[package]
+name = "polycubes-app"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "polycubes_app"
+
+[[bin]]
+name = "polycubes-app"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+polycubes-core = { path = "../polycubes-core" }
+polycubes-sampling = { path = "../polycubes-sampling" }
+rand = "0.9"
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = [] }
+thiserror = "2"

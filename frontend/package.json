@@ -1,0 +1,11 @@
+{
+  "name": "polycubes-frontend",
+  "private": true,
+  "description": "Elm + Three.js frontend of the polycubes desktop application",
+  "scripts": {
+    "build": "./build.sh"
+  },
+  "dependencies": {
+    "three": "0.170.0"
+  }
+}
