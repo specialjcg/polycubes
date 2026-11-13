@@ -67,6 +67,27 @@ Machine : 8 threads matériels (`nproc`). Accélération mesurée ×4,5 sur 8 th
 
 Croissance d'environ ×7,6 par cube. n = 22 a demandé environ 10 jours sur 64 threads à Thompson avec l'algorithme de Dodds (même principe que ce dépôt) ; n = 23 en demanderait environ 7 fois plus. Reproduire Dodds ne suffit donc pas sur 8 cœurs : il faut plus de matériel ou un gain algorithmique supplémentaire (formule fermée sur plus de 3 cubes, GPU).
 
+## Budget n = 23 (estimation du 2026-11-13)
+
+Unité mesurée : fixes n = 15 en 12,8 s sur 4 cœurs (i7-1185G7, machine calme), soit 51 cœur-secondes.
+
+Le travail est proportionnel au nombre de nœuds finaux, A001931(n − 4). De n = 15 à n = 23 : A001931(19) / A001931(11) ≈ 1,08 × 10⁷ (A001931(19) = 651 459 315 795 897 cité de mémoire, non relu sur OEIS). Le coût par nœud final croît aussi avec n, d'un facteur inconnu pris entre 1 et 1,5.
+
+→ **6 400 à 9 600 cœur-jours** avec ce code, sur des cœurs équivalents à ceux de ce portable. Recoupement : Thompson a mis environ 640 vCPU-jours pour n = 22, soit environ 4 900 vCPU-jours (≈ 2 500 cœurs physiques-jours) extrapolés à n = 23.
+
+| matériel | cœurs | durée (8 000 cœur-jours) | coût |
+|---|--:|--:|--:|
+| ce portable | 4 | ~5,5 ans | — |
+| `gpu-ollama` (48 cœurs d'après la note du vault) | 48 | ~170 jours | électricité |
+| 1 × Hetzner AX162 (EPYC 9454P) | 48 | ~170 jours | ~1 300 € HT |
+| 4 × Hetzner AX162 | 192 | ~42 jours | ~2 000 € HT |
+| AWS c7a.48xlarge, spot | 192 | ~42 jours | 3 000 à 3 800 $ |
+| AWS c7a.48xlarge, à la demande | 192 | ~42 jours | ~9 900 $ |
+
+Prix relevés par recherche web le 2026-11-13 : Hetzner AX162 199 €/mois + 79 à 100 € de mise en service ; c7a.48xlarge 9,85 $/h à la demande, 3 à 3,8 $/h en spot. Hypothèse non vérifiée : un cœur serveur vaut un cœur de ce portable. À mesurer sur la machine cible avant tout engagement.
+
+Préalables absents du code : points de reprise sur disque, découpage en lots, vérification croisée du résultat (deux exécutions indépendantes ou somme de contrôle par lot).
+
 ## Pistes
 
 1. Alléger le balayage de frontière (jusqu'à 36 cellules lues par cellule non-essayée).
