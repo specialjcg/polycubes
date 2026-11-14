@@ -136,7 +136,15 @@ Rédigées dans `docs/preuves/`, sur un modèle de l'algorithme et non sur le Ru
 - [Les formes compactes sont rares](docs/preuves/formes-compactes-rares.md) : la proportion de polycubes dont la boîte englobante est remplie à 38 % ou plus tend vers 0, à partir du seul a(16) recalculé ici (36 % avec a(22) d'OEIS). Résultat asymptotique, sans portée aux tailles affichées. Non prouvé : que le taux typique tend vers 0, et que la croissance par voisin favorise le compact.
 - [La formule fermée des 4 derniers cubes](docs/preuves/formule-quatre-cubes.md) : cas par cas, selon le nombre de cases libres ajoutées.
 
-Non relu par un tiers. Pas encore de preuve formelle (Lean).
+Non relu par un tiers.
+
+**Preuve formelle (Lean 4.35.0, bibliothèque de base seule, sans Mathlib)** : `lean/RankedDraw.lean` formalise le théorème du tirage par rang sur un arbre fini abstrait. `Tree.pick` reproduit la descente de `polycube_at` ; `Tree.pick_eq` établit qu'elle rend la feuille de ce rang dans l'ordre de gauche à droite ; suivent `pick_mem`, `pick_none`, `pick_surjective` et `pick_injective` (feuilles distinctes). Aucun `sorry` ; axiomes utilisés : `propext`, `Quot.sound`.
+
+```bash
+lean lean/RankedDraw.lean
+```
+
+Ce que Lean ne couvre pas : le lien entre cet arbre abstrait et le code Rust, le lemme de Redelmeier (feuilles = polycubes fixes, tous distincts), la formule des 4 cubes, la borne de rareté, et le passage de « bijection » à « probabilité uniforme », laissé en prose.
 
 ## Pistes
 

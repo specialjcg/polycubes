@@ -61,6 +61,10 @@ Fixons $n$. Pour un nœud $v$ de profondeur au plus $n$, notons $s(v)$ le nombre
 
 **Conséquence.** Si le rang est uniforme sur $\{0, \dots, A(n) - 1\}$, chaque polycube fixe de $n$ cubes sort avec probabilité $1 / A(n)$.
 
+## Preuve formelle
+
+Le théorème est vérifié par Lean dans `lean/RankedDraw.lean`, sur un arbre fini abstrait dont les feuilles tiennent lieu de polycubes de $n$ cubes : `Tree.pick_eq` dit que la descente par rang rend la feuille de ce rang dans l'ordre de gauche à droite, d'où la bijection quand les feuilles sont distinctes (`pick_surjective`, `pick_injective`). Le lemme de Redelmeier, lui, n'est pas formalisé : c'est lui qui garantit que les feuilles sont les polycubes fixes, tous distincts.
+
 ## Ce que la preuve suppose
 
 - **$s(v)$ est bien calculé.** `completion_count` relance l'énumération sous le nœud. Elle utilise la formule fermée des 4 derniers cubes : voir sa [preuve](formule-quatre-cubes.md).
