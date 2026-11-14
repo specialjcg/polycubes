@@ -5,6 +5,7 @@ mod budding;
 mod census;
 mod colony;
 mod evolution;
+mod fractal;
 mod polycube_life;
 mod rule;
 
@@ -13,5 +14,6 @@ pub use budding::{Lineage, canonical_shape, grow_by_budding, grow_by_mutating_bu
 pub use census::{Census, census};
 pub use colony::grow_colony;
 pub use evolution::{Evolution, Fate, Limits, evolve, next_generation};
+pub use fractal::growth_dimension;
 pub use polycube_life::{LivingPolycube, PolycubeLifeRule, PolycubeWorld, live_as_polycubes};
 pub use rule::{Neighbourhood, Rule, RuleError};
