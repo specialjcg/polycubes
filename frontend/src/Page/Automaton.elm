@@ -1,6 +1,7 @@
 module Page.Automaton exposing (Model, Msg, init, start, subscriptions, update, view)
 
-{-| A polycube that grows generation after generation, in one of two ways.
+{-| A polycube that grows generation after generation, in one of three ways.
+By budding, it bears turned copies of itself against it, which bud in turn.
 As a replicator, under Fredkin's parity rule, it comes back as six copies of
 itself at each power of two. As a colony, its cells divide at random into
 the free cells beside them.
@@ -46,7 +47,8 @@ type SeedKind
 
 
 type Mode
-    = Replicator
+    = Budding
+    | Replicator
     | Colony
 
 
@@ -59,10 +61,11 @@ type alias Model =
 
 
 {-| `elapsedGenerations` runs past the last generation while it is held.
+`cellsPerCopy` is set when the generations list copies of the seed.
 -}
 type Run
     = Running
-    | Ran { run : AutomatonRun, elapsedGenerations : Int }
+    | Ran { run : AutomatonRun, elapsedGenerations : Int, cellsPerCopy : Maybe Int }
     | Failed String
 
 
@@ -79,7 +82,7 @@ init : Model
 init =
     { cellCount = initialCellCount
     , seedKind = Uniform
-    , mode = Replicator
+    , mode = Budding
     , run = Running
     }
 
@@ -122,6 +125,9 @@ seedKindName seedKind =
 modeName : Mode -> String
 modeName mode =
     case mode of
+        Budding ->
+            "budding"
+
         Replicator ->
             "replicator"
 
@@ -146,13 +152,27 @@ update msg model =
             requestRun model
 
         RunFinished (Ok run) ->
-            ( { model | run = Ran { run = run, elapsedGenerations = 0 } }, Cmd.none )
+            ( { model | run = Ran { run = run, elapsedGenerations = 0, cellsPerCopy = cellsPerCopy model } }
+            , Cmd.none
+            )
 
         RunFinished (Err reason) ->
             ( { model | run = Failed reason }, Cmd.none )
 
         GenerationInterval ->
             ( { model | run = letAGenerationPass model.run }, Cmd.none )
+
+
+{-| Only budding keeps the seed whole: its generations list copies of it.
+-}
+cellsPerCopy : Model -> Maybe Int
+cellsPerCopy model =
+    case model.mode of
+        Budding ->
+            Just model.cellCount
+
+        _ ->
+            Nothing
 
 
 {-| The run plays in a loop: after the last generation has been held, the
@@ -200,7 +220,7 @@ view model =
         , viewChoice "Croissance"
             ModeChosen
             model.mode
-            [ ( Replicator, "Réplicateur" ), ( Colony, "Colonie" ) ]
+            [ ( Budding, "Bourgeonnement" ), ( Replicator, "Réplicateur" ), ( Colony, "Colonie" ) ]
         , p [ Attr.class "explanation" ] [ text (explain model.mode) ]
         , viewRun model.run
         ]
@@ -209,11 +229,24 @@ view model =
 explain : Mode -> String
 explain mode =
     case mode of
+        Budding ->
+            "À chaque génération, un polycube sur deux tente de bourgeonner : une copie de lui-même, tournée au hasard mais jamais en miroir, naît contre lui là où la place est libre. Chaque copie a sa couleur et bourgeonne à son tour."
+
         Replicator ->
             "Règle de parité de Fredkin : une case vit si un nombre impair de ses six voisines vivent. Quelle que soit la graine, elle réapparaît en six exemplaires aux générations 1, 2, 4 et 8, de plus en plus écartés."
 
         Colony ->
             "À chaque génération, chaque cellule qui a une case libre à côté d'elle se divise avec 4 chances sur 10, vers une case libre prise au hasard. Les cellules les plus anciennes sont les plus sombres."
+
+
+describePopulation : Maybe Int -> Int -> String
+describePopulation copySize cellCount =
+    case copySize of
+        Just size ->
+            String.fromInt (cellCount // size) ++ " polycubes, " ++ String.fromInt cellCount ++ " cellules"
+
+        Nothing ->
+            String.fromInt cellCount ++ " cellules"
 
 
 viewChoice : String -> (choice -> Msg) -> choice -> List ( choice, String ) -> Html Msg
@@ -247,12 +280,18 @@ viewRun run =
                     List.drop shownGeneration played.run.generations
                         |> List.head
                         |> Maybe.withDefault []
+
+                frame =
+                    { lowestCorner = played.run.lowestCorner, highestCorner = played.run.highestCorner }
             in
             div []
                 [ div [ Attr.class "automaton" ]
-                    [ Scene.viewFramed
-                        { lowestCorner = played.run.lowestCorner, highestCorner = played.run.highestCorner }
-                        living
+                    [ case played.cellsPerCopy of
+                        Just copySize ->
+                            Scene.viewCopiesFramed frame copySize living
+
+                        Nothing ->
+                            Scene.viewFramed frame living
                     ]
                 , p [ Attr.class "status" ]
                     [ text
@@ -261,8 +300,7 @@ viewRun run =
                             ++ " sur "
                             ++ String.fromInt lastGeneration
                             ++ " : "
-                            ++ String.fromInt (List.length living)
-                            ++ " cellules"
+                            ++ describePopulation played.cellsPerCopy (List.length living)
                         )
                     ]
                 ]

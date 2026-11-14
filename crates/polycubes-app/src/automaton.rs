@@ -1,6 +1,6 @@
 //! Polycubes that grow generation after generation, for the frontend.
 
-use polycubes_automaton::{Limits, Neighbourhood, Rule, evolve, grow_colony};
+use polycubes_automaton::{Limits, Neighbourhood, Rule, evolve, grow_by_budding, grow_colony};
 use polycubes_core::Coordinates;
 use serde::{Deserialize, Serialize};
 
@@ -22,6 +22,11 @@ const COLONY_POPULATION_LIMIT: usize = 1000;
 
 /// Share of the cells with room beside them that divide at each generation.
 pub const COLONY_DIVISION_CHANCE: f64 = 0.4;
+
+const BUDDING_GENERATION_COUNT: usize = 16;
+
+/// Share of the polycubes that try to bud at each generation.
+pub const BUDDING_CHANCE: f64 = 0.5;
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum AutomatonError {
@@ -48,6 +53,8 @@ pub enum GrowthMode {
     Replicator,
     /// Cells divide at random into the free cells beside them.
     Colony,
+    /// Whole polycubes bud turned copies of themselves against them.
+    Budding,
 }
 
 /// The generations of one seed, the seed first, and the box holding them
@@ -110,6 +117,24 @@ pub fn grow(
     ))
 }
 
+/// Grows a colony of copies of `seed`; `buds` and `choose_placement` stand
+/// for the random choices of each copy. A generation lists its copies one
+/// after the other, each as many cells as the seed.
+#[must_use]
+pub fn bud(
+    seed: &[Coordinates],
+    buds: impl FnMut() -> bool,
+    choose_placement: impl FnMut(usize) -> usize,
+) -> AutomatonRun {
+    AutomatonRun::of(grow_by_budding(
+        seed,
+        BUDDING_GENERATION_COUNT,
+        COLONY_POPULATION_LIMIT,
+        buds,
+        choose_placement,
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -142,6 +167,17 @@ mod tests {
         let populations: Vec<usize> = run.generations.iter().map(Vec::len).collect();
         assert!(populations.is_sorted(), "{populations:?}");
         assert_eq!(populations.last(), Some(&COLONY_POPULATION_LIMIT));
+    }
+
+    #[test]
+    fn budding_fills_the_population_limit_with_whole_copies() {
+        let run = bud(&SEED, || true, |_| 0);
+
+        assert_eq!(run.generations.len(), BUDDING_GENERATION_COUNT + 1);
+        assert_eq!(
+            run.generations.last().map(Vec::len),
+            Some(COLONY_POPULATION_LIMIT / SEED.len() * SEED.len())
+        );
     }
 
     #[test]

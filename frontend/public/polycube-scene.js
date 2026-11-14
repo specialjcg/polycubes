@@ -7,6 +7,8 @@
 // the room every polycube of at most n cells fits in, so that the view stays
 // still while the polycube changes. `framed="[[x,y,z],[x,y,z]]"` frames the
 // box between two opposite corner cells instead, for cells that spread far.
+// `copy-size="n"` tells that the cells list copies of one polycube, n cells
+// each: every copy then gets its own colour.
 // The Elm application owns the state; this element only draws what its
 // attributes describe.
 import * as THREE from "three";
@@ -22,6 +24,11 @@ const CANDIDATE_OPACITY = 0.35;
 const DISCARDED_COLOUR = 0xa3261a;
 const DISCARDED_SIDE = 0.45;
 const ADDED_COLOUR = 0x3b6fb5;
+// Hues of successive copies stand a golden angle apart, so that copies born
+// one after the other, often side by side, never look alike.
+const COPY_HUE_STEP = 0.381966;
+const COPY_SATURATION = 0.55;
+const COPY_LIGHTNESS = 0.58;
 // Share of the room of all polycubes that the camera frames: most polycubes
 // stay near the first cell, so framing the whole room would shrink them;
 // only the straightest ones graze the border.
@@ -44,6 +51,7 @@ class PolycubeScene extends HTMLElement {
     "added",
     "extent",
     "framed",
+    "copy-size",
   ];
 
   connectedCallback() {
@@ -130,10 +138,15 @@ class PolycubeScene extends HTMLElement {
     const placedCells = this.cellsOf("cells");
     const extent = Number(this.getAttribute("extent") ?? placedCells.length);
     const lastPlacementIndex = Math.max(extent - 1, 1);
+    const copySize = Number(this.getAttribute("copy-size") ?? 0);
     const builderByKey = new Map();
     placedCells.forEach((cell, placementIndex) => {
-      builderByKey.set(`placed ${placementIndex} ${cell}`, () =>
-        buildPlacedCube(cell, placementIndex, placementIndex / lastPlacementIndex),
+      const colour =
+        copySize > 0
+          ? colourOfCopy(Math.floor(placementIndex / copySize))
+          : colourOfPlacement(placementIndex / lastPlacementIndex);
+      builderByKey.set(`placed ${placementIndex} ${cell} ${colour.getHex()}`, () =>
+        buildPlacedCube(cell, placementIndex, colour),
       );
     });
     for (const cell of this.cellsOf("candidates")) {
@@ -251,11 +264,22 @@ function boxBetweenCells(cornerCells) {
 }
 
 // `placementProgress` runs from 0 (first cell placed) to 1 (last one).
-function buildPlacedCube(cell, placementIndex, placementProgress) {
-  const colour = new THREE.Color(FIRST_CELL_COLOUR).lerp(
+function colourOfPlacement(placementProgress) {
+  return new THREE.Color(FIRST_CELL_COLOUR).lerp(
     new THREE.Color(LAST_CELL_COLOUR),
     placementProgress,
   );
+}
+
+function colourOfCopy(copyIndex) {
+  return new THREE.Color().setHSL(
+    (copyIndex * COPY_HUE_STEP) % 1,
+    COPY_SATURATION,
+    COPY_LIGHTNESS,
+  );
+}
+
+function buildPlacedCube(cell, placementIndex, colour) {
   const cube = buildCube(cell, CUBE_SIDE, new THREE.MeshStandardMaterial({ color: colour }));
   cube.add(buildEdges(cube.geometry, EDGE_COLOUR));
   cube.userData.placementIndex = placementIndex;

@@ -1,4 +1,4 @@
-module Scene exposing (view, viewAmongNeighbours, viewFirstCells, viewFramed)
+module Scene exposing (view, viewAmongNeighbours, viewCopiesFramed, viewFirstCells, viewFramed)
 
 {-| The 3D view of a polycube, drawn by the `polycube-scene` custom element
 (`public/polycube-scene.js`).
@@ -53,6 +53,19 @@ viewFramed : { lowestCorner : Cell, highestCorner : Cell } -> List Cell -> Html 
 viewFramed frame cells =
     Html.node "polycube-scene"
         [ encodedCellsAttribute "framed" [ frame.lowestCorner, frame.highestCorner ]
+        , cellsAttribute cells
+        ]
+        []
+
+
+{-| Like `viewFramed`, for cells that list copies of one polycube one after
+the other, `cellsPerCopy` cells each: every copy gets its own colour.
+-}
+viewCopiesFramed : { lowestCorner : Cell, highestCorner : Cell } -> Int -> List Cell -> Html msg
+viewCopiesFramed frame cellsPerCopy cells =
+    Html.node "polycube-scene"
+        [ encodedCellsAttribute "framed" [ frame.lowestCorner, frame.highestCorner ]
+        , Attr.attribute "copy-size" (String.fromInt cellsPerCopy)
         , cellsAttribute cells
         ]
         []

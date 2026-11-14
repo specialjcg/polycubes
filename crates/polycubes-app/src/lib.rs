@@ -141,6 +141,11 @@ fn run_automaton(
             || rand::random_bool(automaton::COLONY_DIVISION_CHANCE),
             |free_neighbour_count| rand::random_range(0..free_neighbour_count),
         ),
+        GrowthMode::Budding => automaton::bud(
+            &seed,
+            || rand::random_bool(automaton::BUDDING_CHANCE),
+            |placement_count| rand::random_range(0..placement_count),
+        ),
     })
 }
 
