@@ -9,7 +9,7 @@ use crate::measure::visit_with_contact_counts;
 /// A polycube up to rotation, with the number of fixed polycubes it stands
 /// for.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LoopedShape {
+pub struct Shape {
     /// Cells of one orientation, sorted, the smallest coordinates at zero.
     pub cells: Vec<Coordinates>,
     pub orientation_count: u64,
@@ -20,7 +20,7 @@ pub struct LoopedShape {
 pub struct MostLooped {
     /// Independent loops: contacts between cubes beyond those of a tree.
     pub loop_count: usize,
-    pub shapes: Vec<LoopedShape>,
+    pub shapes: Vec<Shape>,
 }
 
 /// Finds the polycubes of `cell_count` cells with the most loops by visiting
@@ -51,7 +51,7 @@ pub fn most_looped_polycubes(cell_count: usize) -> MostLooped {
         loop_count: most_contact_count + 1 - cell_count,
         shapes: orientation_counts
             .into_iter()
-            .map(|(cells, orientation_count)| LoopedShape {
+            .map(|(cells, orientation_count)| Shape {
                 cells,
                 orientation_count,
             })
