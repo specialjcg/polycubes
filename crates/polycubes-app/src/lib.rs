@@ -136,6 +136,7 @@ fn run_automaton(
     };
     Ok(match mode {
         GrowthMode::Replicator => automaton::replicate(&seed),
+        GrowthMode::EdgeReplicator => automaton::replicate_over_edges(&seed),
         GrowthMode::Colony => automaton::grow(
             &seed,
             || rand::random_bool(automaton::COLONY_DIVISION_CHANCE),

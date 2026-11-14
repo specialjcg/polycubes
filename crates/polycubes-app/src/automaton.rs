@@ -15,6 +15,13 @@ const REPLICATOR_LIMITS: Limits = Limits {
     population: 3000,
 };
 
+/// Over the 12 edge neighbours the copies show at generations 1, 2 and 4;
+/// generation 7 would hold 1728 of them.
+const EDGE_REPLICATOR_LIMITS: Limits = Limits {
+    generation_count: 4,
+    population: 3000,
+};
+
 const COLONY_GENERATION_COUNT: usize = 24;
 
 /// Cells drawn at most: beyond, the 3D view slows down.
@@ -51,6 +58,8 @@ pub enum GrowthMode {
     /// face neighbours do. Any seed comes back as six copies of itself at
     /// each power of two.
     Replicator,
+    /// The same parity rule over the twelve edge neighbours: twelve copies.
+    EdgeReplicator,
     /// Cells divide at random into the free cells beside them.
     Colony,
     /// Whole polycubes bud turned copies of themselves against them.
@@ -92,12 +101,27 @@ pub fn check_seed_cell_count(cell_count: usize) -> Result<(), AutomatonError> {
     Ok(())
 }
 
-/// Runs the parity rule from `seed`.
+/// Runs the parity rule over the six face neighbours from `seed`.
 #[must_use]
 pub fn replicate(seed: &[Coordinates]) -> AutomatonRun {
-    let parity_rule = Rule::new(Neighbourhood::Faces, &[1, 3, 5], &[1, 3, 5])
-        .expect("odd counts fit six neighbours");
-    AutomatonRun::of(evolve(seed, &parity_rule, REPLICATOR_LIMITS).generations)
+    run_parity_rule(seed, Neighbourhood::Faces, REPLICATOR_LIMITS)
+}
+
+/// Runs the parity rule over the twelve edge neighbours from `seed`.
+#[must_use]
+pub fn replicate_over_edges(seed: &[Coordinates]) -> AutomatonRun {
+    run_parity_rule(seed, Neighbourhood::Edges, EDGE_REPLICATOR_LIMITS)
+}
+
+fn run_parity_rule(
+    seed: &[Coordinates],
+    neighbourhood: Neighbourhood,
+    limits: Limits,
+) -> AutomatonRun {
+    let odd_counts: Vec<usize> = (1..=neighbourhood.neighbour_count()).step_by(2).collect();
+    let parity_rule = Rule::new(neighbourhood, &odd_counts, &odd_counts)
+        .expect("odd counts up to the number of neighbours fit it");
+    AutomatonRun::of(evolve(seed, &parity_rule, limits).generations)
 }
 
 /// Grows a colony from `seed`; `divides` and `choose_neighbour` stand for
@@ -148,6 +172,14 @@ mod tests {
         assert_eq!(run.generations.len(), 9);
         assert_eq!(run.generations[0].len(), SEED.len());
         assert_eq!(run.generations[8].len(), 6 * SEED.len());
+    }
+
+    #[test]
+    fn the_edge_replicator_ends_on_twelve_copies_of_the_seed() {
+        let run = replicate_over_edges(&SEED);
+
+        assert_eq!(run.generations.len(), 5);
+        assert_eq!(run.generations[4].len(), 12 * SEED.len());
     }
 
     #[test]

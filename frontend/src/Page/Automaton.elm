@@ -1,6 +1,6 @@
 module Page.Automaton exposing (Model, Msg, init, start, subscriptions, update, view)
 
-{-| A polycube that grows generation after generation, in one of three ways.
+{-| A polycube that grows generation after generation, in one of four ways.
 By budding, it bears turned copies of itself against it, which bud in turn.
 As a replicator, under Fredkin's parity rule, it comes back as six copies of
 itself at each power of two. As a colony, its cells divide at random into
@@ -49,6 +49,7 @@ type SeedKind
 type Mode
     = Budding
     | Replicator
+    | EdgeReplicator
     | Colony
 
 
@@ -133,6 +134,9 @@ modeName mode =
         Replicator ->
             "replicator"
 
+        EdgeReplicator ->
+            "edgeReplicator"
+
         Colony ->
             "colony"
 
@@ -176,8 +180,8 @@ update msg model =
 
 
 {-| Budding keeps the seed whole, one colour per copy. A colony lists its
-cells in birth order, so they are coloured by age. The replicator has
-neither, its cells are coloured by where they stand.
+cells in birth order, so they are coloured by age. The replicators have
+neither, their cells are coloured by where they stand.
 -}
 colouringOf : Mode -> Int -> AutomatonRun -> Scene.Colouring
 colouringOf mode seedCellCount run =
@@ -189,6 +193,9 @@ colouringOf mode seedCellCount run =
             Scene.ByAge (List.map List.length run.generations |> List.maximum |> Maybe.withDefault 1)
 
         Replicator ->
+            Scene.ByDistance
+
+        EdgeReplicator ->
             Scene.ByDistance
 
 
@@ -246,7 +253,7 @@ view model =
         , viewChoice "Croissance"
             ModeChosen
             model.mode
-            [ ( Budding, "Bourgeonnement" ), ( Replicator, "Réplicateur" ), ( Colony, "Colonie" ) ]
+            [ ( Budding, "Bourgeonnement" ), ( Replicator, "Réplicateur à 6" ), ( EdgeReplicator, "Réplicateur à 12" ), ( Colony, "Colonie" ) ]
         , p [ Attr.class "explanation" ] [ text (explain model.mode) ]
         , viewRun model.run
         ]
@@ -260,6 +267,9 @@ explain mode =
 
         Replicator ->
             "Règle de parité de Fredkin : une case vit si un nombre impair de ses six voisines vivent. Quelle que soit la graine, elle réapparaît en six exemplaires aux générations 1, 2, 4 et 8, de plus en plus écartés. Les couleurs suivent la distance au centre."
+
+        EdgeReplicator ->
+            "La même règle de parité, mais sur les douze voisines par arête : la graine réapparaît en douze exemplaires aux générations 1, 2 et 4, vers le milieu des arêtes d'un cube. Les couleurs suivent la distance au centre."
 
         Colony ->
             "À chaque génération, chaque cellule se divise avec 4 chances sur 10, vers une case libre voisine qui ne touche aucune autre cellule : la colonie pousse en branches, sans jamais se refermer en boucle. Les couleurs suivent l'âge : les cellules les plus anciennes sont rouges, les plus jeunes violettes."
