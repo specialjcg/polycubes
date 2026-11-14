@@ -12,6 +12,11 @@ const relayedCommands = [
     request: "requestGrowthComparison",
     result: "growthComparisonFinishedPort",
   },
+  {
+    command: "trace_enumeration",
+    request: "requestEnumerationTrace",
+    result: "enumerationTraceFinishedPort",
+  },
 ];
 
 for (const { command, request, result } of relayedCommands) {

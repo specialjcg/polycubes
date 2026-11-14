@@ -5,5 +5,8 @@ mod redelmeier;
 mod symmetry;
 
 pub use lattice::Coordinates;
-pub use redelmeier::{EnumerationCursor, count_fixed_polycubes, count_fixed_polycubes_in_parallel};
+pub use redelmeier::{
+    EnumerationCursor, EnumerationStep, count_fixed_polycubes, count_fixed_polycubes_in_parallel,
+    trace_enumeration,
+};
 pub use symmetry::{count_one_sided_polycubes, one_sided_counts_from_fixed};

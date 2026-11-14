@@ -127,7 +127,7 @@ view : Model -> Html Msg
 view model =
     div []
         [ div [ Attr.class "controls" ]
-            [ CellCountSlider.view CellCountChosen model.cellCount
+            [ CellCountSlider.view CellCountSlider.largestDrawnCellCount CellCountChosen model.cellCount
             , button [ onClick ComparisonRequested ] [ text "Nouveau tirage" ]
             , button [ onClick ReplayRequested ] [ text "Rejouer" ]
             ]

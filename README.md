@@ -36,10 +36,13 @@ Coût d'un tirage, 1 thread, sans table de sous-arbres : n = 10 en 4 ms, n = 12 
 
 Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates/polycubes-cli` (binaire), `crates/polycubes-sampling` (tirage), `crates/polycubes-app` (coque Tauri), `frontend/` (Elm + Three.js).
 
-**Application de bureau** (`crates/polycubes-app` + `frontend/`) : Tauri 2, interface Elm, rendu Three.js. Deux pages, de 1 à 12 cubes :
+**Application de bureau** (`crates/polycubes-app` + `frontend/`) : Tauri 2, interface Elm, rendu Three.js. Trois pages :
 
 - **Croissance biaisée contre tirage uniforme** : deux polycubes apparaissent cube par cube côte à côte. À gauche, chaque cube se colle sur une case libre voisine prise au hasard (croissance d'Eden, `grow_by_random_neighbour`), ce qui favorise les formes compactes. À droite, un polycube tiré uniformément, montré dans son ordre d'énumération : seul le polycube final est uniforme, pas ses étapes. Sous chaque vue, la boîte englobante et son taux de remplissage.
+- **Énumération de Redelmeier** (1 à 5 cubes) : l'algorithme polycube par polycube, dans l'ordre où il les visite. Cubes posés, cases en attente (vertes, translucides), cases écartées (cages rouges : déjà essayées plus haut dans l'arbre, interdites en dessous, d'où l'unicité), compteur par taille. Pause, pas à pas, rejouer. La trace vient de `trace_enumeration` (`polycubes-core`), bâtie sur `EnumerationCursor` ; le comptage fermé des 4 derniers cubes n'y figure pas, chaque polycube est visité.
 - **Tirage uniforme** : un polycube tiré uniformément, à faire tourner en 3D.
+
+Les deux pages de tirage vont de 1 à 12 cubes.
 
 ```bash
 frontend/build.sh
@@ -51,8 +54,9 @@ cargo run --release -p polycubes-app
 
 - `crates/polycubes-app/src/drawing.rs` : seule logique de la coque (taille acceptée, mémoire par taille, rang fourni par l'appelant) ; la commande Tauri de `lib.rs` y ajoute le hasard.
 - `crates/polycubes-app/src/growth.rs` : assemble la comparaison des deux croissances.
-- `frontend/src` : `Main.elm` (onglets), `Page/Growth.elm` et `Page/Draw.elm` (une page = état, messages et vue ensemble), `Backend.elm` (ports vers Rust), `Scene.elm` (élément `<polycube-scene>`), `CellCountSlider.elm`, `Polycube.elm`.
-- `frontend/public/polycube-scene.js` : élément personnalisé Three.js, piloté par ses attributs `cells` et `shown` (nombre de cubes affichés) ; Three.js est copié depuis `node_modules` par `build.sh`, sans CDN.
+- `crates/polycubes-app/src/enumeration.rs` : borne la taille tracée à 5 (639 polycubes) et joint à chaque nœud le compteur par taille.
+- `frontend/src` : `Main.elm` (onglets), `Page/Growth.elm`, `Page/Enumeration.elm` et `Page/Draw.elm` (une page = état, messages et vue ensemble), `Backend.elm` (ports vers Rust), `Scene.elm` (élément `<polycube-scene>`), `CellCountSlider.elm`, `Polycube.elm`.
+- `frontend/public/polycube-scene.js` : élément personnalisé Three.js, piloté par ses attributs `cells`, `shown` (nombre de cubes affichés), `candidates`, `discarded` et `extent` (cadrage fixe pour tous les polycubes d'au plus n cubes) ; les cubes déjà dessinés sont conservés d'un état au suivant ; Three.js est copié depuis `node_modules` par `build.sh`, sans CDN.
 - `frontend/tools/capture.mjs` : capture d'écran de la page dans Chrome headless en temps réel, pour vérifier une animation sans la fenêtre Tauri.
 - `frontend/public/backend.js` : relais des ports Elm vers `invoke`. Il émet `ready` une fois abonné : une demande envoyée depuis `init` serait perdue.
 

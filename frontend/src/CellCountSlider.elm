@@ -1,4 +1,4 @@
-module CellCountSlider exposing (initialCellCount, parse, view)
+module CellCountSlider exposing (initialCellCount, largestDrawnCellCount, parse, view)
 
 {-| Choice of the number of cubes of the polycubes shown.
 -}
@@ -15,8 +15,8 @@ smallestCellCount =
 
 {-| Must match `MAX_INTERACTIVE_CELL_COUNT` of the backend.
 -}
-largestCellCount : Int
-largestCellCount =
+largestDrawnCellCount : Int
+largestDrawnCellCount =
     12
 
 
@@ -32,8 +32,10 @@ parse sliderValue =
     String.toInt sliderValue
 
 
-view : (String -> msg) -> Int -> Html msg
-view onChosen cellCount =
+{-| Slider from one cube to `largestCellCount` cubes.
+-}
+view : Int -> (String -> msg) -> Int -> Html msg
+view largestCellCount onChosen cellCount =
     label []
         [ text ("Cubes : " ++ String.fromInt cellCount)
         , input

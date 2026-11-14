@@ -108,4 +108,38 @@ impl EnumerationCursor {
             .map(|&cell| self.lattice.coordinates(cell))
             .collect()
     }
+
+    /// Cells that the children of the current node add, in child order.
+    #[must_use]
+    pub fn candidates(&self) -> Vec<Coordinates> {
+        let candidate_end = self.first_untried + self.candidate_count();
+        self.coordinates_of_untried(self.first_untried..candidate_end)
+    }
+
+    /// Cells that no polycube below the current node may hold: they were
+    /// candidates of an ancestor, tried before the cell chosen there.
+    #[must_use]
+    pub fn discarded_cells(&self) -> Vec<Coordinates> {
+        let first_untried_after_choices = self
+            .parent_candidates
+            .iter()
+            .skip(1)
+            .map(|candidates| candidates.start)
+            .chain(std::iter::once(self.first_untried));
+        self.parent_candidates
+            .iter()
+            .zip(first_untried_after_choices)
+            .flat_map(|(candidates, first_untried_after_choice)| {
+                let chosen_untried = first_untried_after_choice - 1;
+                self.coordinates_of_untried(candidates.start..chosen_untried)
+            })
+            .collect()
+    }
+
+    fn coordinates_of_untried(&self, untried_indices: std::ops::Range<usize>) -> Vec<Coordinates> {
+        self.enumerator.untried_cells[untried_indices]
+            .iter()
+            .map(|&cell| self.lattice.coordinates(cell))
+            .collect()
+    }
 }

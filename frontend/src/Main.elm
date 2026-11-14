@@ -10,17 +10,20 @@ import Html exposing (Html, button, h1, main_, nav, text)
 import Html.Attributes as Attr
 import Html.Events exposing (onClick)
 import Page.Draw
+import Page.Enumeration
 import Page.Growth
 
 
 type Page
     = GrowthPage
+    | EnumerationPage
     | DrawPage
 
 
 type alias Model =
     { shownPage : Page
     , growth : Page.Growth.Model
+    , enumeration : Page.Enumeration.Model
     , draw : Page.Draw.Model
     }
 
@@ -29,6 +32,7 @@ type Msg
     = BackendReady
     | PageChosen Page
     | GrowthMsg Page.Growth.Msg
+    | EnumerationMsg Page.Enumeration.Msg
     | DrawMsg Page.Draw.Msg
 
 
@@ -46,6 +50,7 @@ init : Model
 init =
     { shownPage = GrowthPage
     , growth = Page.Growth.init
+    , enumeration = Page.Enumeration.init
     , draw = Page.Draw.init
     }
 
@@ -58,11 +63,18 @@ update msg model =
                 ( growth, growthCmd ) =
                     Page.Growth.start model.growth
 
+                ( enumeration, enumerationCmd ) =
+                    Page.Enumeration.start model.enumeration
+
                 ( draw, drawCmd ) =
                     Page.Draw.start model.draw
             in
-            ( { model | growth = growth, draw = draw }
-            , Cmd.batch [ Cmd.map GrowthMsg growthCmd, Cmd.map DrawMsg drawCmd ]
+            ( { model | growth = growth, enumeration = enumeration, draw = draw }
+            , Cmd.batch
+                [ Cmd.map GrowthMsg growthCmd
+                , Cmd.map EnumerationMsg enumerationCmd
+                , Cmd.map DrawMsg drawCmd
+                ]
             )
 
         PageChosen page ->
@@ -74,6 +86,13 @@ update msg model =
                     Page.Growth.update growthMsg model.growth
             in
             ( { model | growth = growth }, Cmd.map GrowthMsg growthCmd )
+
+        EnumerationMsg enumerationMsg ->
+            let
+                ( enumeration, enumerationCmd ) =
+                    Page.Enumeration.update enumerationMsg model.enumeration
+            in
+            ( { model | enumeration = enumeration }, Cmd.map EnumerationMsg enumerationCmd )
 
         DrawMsg drawMsg ->
             let
@@ -88,6 +107,7 @@ subscriptions model =
     Sub.batch
         [ Backend.ready (\_ -> BackendReady)
         , Sub.map GrowthMsg (Page.Growth.subscriptions model.growth)
+        , Sub.map EnumerationMsg (Page.Enumeration.subscriptions model.enumeration)
         , Sub.map DrawMsg Page.Draw.subscriptions
         ]
 
@@ -98,11 +118,15 @@ view model =
         [ h1 [] [ text "Polycubes" ]
         , nav []
             [ viewPageButton model.shownPage GrowthPage "Croissance biaisée contre tirage uniforme"
+            , viewPageButton model.shownPage EnumerationPage "Énumération de Redelmeier"
             , viewPageButton model.shownPage DrawPage "Tirage uniforme"
             ]
         , case model.shownPage of
             GrowthPage ->
                 Html.map GrowthMsg (Page.Growth.view model.growth)
+
+            EnumerationPage ->
+                Html.map EnumerationMsg (Page.Enumeration.view model.enumeration)
 
             DrawPage ->
                 Html.map DrawMsg (Page.Draw.view model.draw)

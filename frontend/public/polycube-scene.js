@@ -1,7 +1,11 @@
 // <polycube-scene cells="[[x,y,z],...]" shown="n"> : 3D view of a polycube.
 // `shown` limits the view to the first n cells; without it all are shown.
+// `candidates` and `discarded` list cells drawn around the polycube: those
+// waiting to extend it, and those it may no longer hold. `extent="n"` frames
+// the room every polycube of at most n cells fits in, so that the view stays
+// still while the polycube changes.
 // The Elm application owns the state; this element only draws what its
-// `cells` attribute describes.
+// attributes describe.
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
@@ -9,6 +13,15 @@ const FIRST_CELL_COLOUR = 0xb5651d;
 const LAST_CELL_COLOUR = 0xf0c08a;
 const EDGE_COLOUR = 0x3c2818;
 const CUBE_SIDE = 0.96;
+const CANDIDATE_COLOUR = 0x2f8f6b;
+const CANDIDATE_SIDE = 0.7;
+const CANDIDATE_OPACITY = 0.35;
+const DISCARDED_COLOUR = 0xa3261a;
+const DISCARDED_SIDE = 0.45;
+// Share of the room of all polycubes that the camera frames: most polycubes
+// stay near the first cell, so framing the whole room would shrink them;
+// only the straightest ones graze the border.
+const FRAMED_ROOM_SHARE = 0.6;
 const FIELD_OF_VIEW_DEGREES = 40;
 const CAMERA_DIRECTION = new THREE.Vector3(1.2, 0.9, 1.6).normalize();
 const CAMERA_MARGIN = 1.15;
@@ -16,7 +29,7 @@ const APPEARANCE_MILLISECONDS = 260;
 const SMALLEST_VISIBLE_SCALE = 0.001;
 
 class PolycubeScene extends HTMLElement {
-  static observedAttributes = ["cells", "shown"];
+  static observedAttributes = ["cells", "shown", "candidates", "discarded", "extent"];
 
   connectedCallback() {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -30,6 +43,7 @@ class PolycubeScene extends HTMLElement {
     this.scene.add(sun);
     this.cubes = new THREE.Group();
     this.scene.add(this.cubes);
+    this.cubeByKey = new Map();
 
     this.camera = new THREE.PerspectiveCamera(FIELD_OF_VIEW_DEGREES, 1, 0.1, 500);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -60,10 +74,10 @@ class PolycubeScene extends HTMLElement {
     if (!this.renderer) {
       return;
     }
-    if (name === "cells") {
-      this.showCells();
-    } else {
+    if (name === "shown") {
       this.showFirstCubes();
+    } else {
+      this.showCells();
     }
   }
 
@@ -76,22 +90,57 @@ class PolycubeScene extends HTMLElement {
   }
 
   clearCubes() {
-    for (const cube of [...this.cubes.children]) {
-      this.cubes.remove(cube);
-      cube.traverse((part) => {
-        part.geometry?.dispose();
-        part.material?.dispose();
-      });
+    for (const key of [...this.cubeByKey.keys()]) {
+      this.removeCube(key);
     }
   }
 
-  showCells() {
-    const cells = JSON.parse(this.getAttribute("cells") ?? "[]");
-    this.clearCubes();
-    cells.forEach((cell, placementIndex) => {
-      this.cubes.add(buildCube(cell, placementIndex / Math.max(cells.length - 1, 1)));
+  removeCube(key) {
+    const cube = this.cubeByKey.get(key);
+    this.cubeByKey.delete(key);
+    this.cubes.remove(cube);
+    cube.traverse((part) => {
+      part.geometry?.dispose();
+      part.material?.dispose();
     });
-    this.frameCubes();
+  }
+
+  cellsOf(attributeName) {
+    return JSON.parse(this.getAttribute(attributeName) ?? "[]");
+  }
+
+  // Cubes already drawn are kept, so that only the cells that change move
+  // on screen: a key names a cell and how it is drawn.
+  showCells() {
+    const placedCells = this.cellsOf("cells");
+    const extent = Number(this.getAttribute("extent") ?? placedCells.length);
+    const lastPlacementIndex = Math.max(extent - 1, 1);
+    const builderByKey = new Map();
+    placedCells.forEach((cell, placementIndex) => {
+      builderByKey.set(`placed ${placementIndex} ${cell}`, () =>
+        buildPlacedCube(cell, placementIndex, placementIndex / lastPlacementIndex),
+      );
+    });
+    for (const cell of this.cellsOf("candidates")) {
+      builderByKey.set(`candidate ${cell}`, () => buildCandidateCube(cell));
+    }
+    for (const cell of this.cellsOf("discarded")) {
+      builderByKey.set(`discarded ${cell}`, () => buildDiscardedCube(cell));
+    }
+
+    for (const key of [...this.cubeByKey.keys()]) {
+      if (!builderByKey.has(key)) {
+        this.removeCube(key);
+      }
+    }
+    for (const [key, buildCube] of builderByKey) {
+      if (!this.cubeByKey.has(key)) {
+        const cube = buildCube();
+        this.cubeByKey.set(key, cube);
+        this.cubes.add(cube);
+      }
+    }
+    this.frame();
     this.showFirstCubes();
   }
 
@@ -100,8 +149,9 @@ class PolycubeScene extends HTMLElement {
   showFirstCubes() {
     const shownAttribute = this.getAttribute("shown");
     const shownCount = shownAttribute === null ? Infinity : Number(shownAttribute);
-    this.cubes.children.forEach((cube, placementIndex) => {
-      const isShown = placementIndex < shownCount;
+    this.cubes.children.forEach((cube) => {
+      const placementIndex = cube.userData.placementIndex;
+      const isShown = placementIndex === undefined || placementIndex < shownCount;
       if (isShown && !cube.visible) {
         cube.userData.appearedAt = performance.now();
         cube.scale.setScalar(SMALLEST_VISIBLE_SCALE);
@@ -124,14 +174,24 @@ class PolycubeScene extends HTMLElement {
     }
   }
 
-  // Centres the polycube and backs the camera off far enough to see it all.
-  frameCubes() {
-    const bounds = new THREE.Box3().setFromObject(this.cubes);
+  // Centres what must be seen and backs the camera off far enough to see it
+  // all. With an `extent` the camera is set once and then left to the user.
+  frame() {
+    const extentAttribute = this.getAttribute("extent");
+    if (extentAttribute !== null && extentAttribute === this.framedExtent) {
+      return;
+    }
+    this.framedExtent = extentAttribute;
+    const bounds =
+      extentAttribute === null
+        ? new THREE.Box3().setFromObject(this.cubes)
+        : roomOfPolycubes(Number(extentAttribute));
     if (bounds.isEmpty()) {
       return;
     }
     const centre = bounds.getCenter(new THREE.Vector3());
-    const radius = bounds.getSize(new THREE.Vector3()).length() / 2;
+    const framedShare = extentAttribute === null ? 1 : FRAMED_ROOM_SHARE;
+    const radius = (bounds.getSize(new THREE.Vector3()).length() / 2) * framedShare;
     const halfFieldOfView = THREE.MathUtils.degToRad(FIELD_OF_VIEW_DEGREES / 2);
     const distance = (radius / Math.sin(halfFieldOfView)) * CAMERA_MARGIN;
     this.controls.target.copy(centre);
@@ -139,24 +199,70 @@ class PolycubeScene extends HTMLElement {
   }
 }
 
+// Room swept by the polycubes of at most `cellCount` cells: the first cell
+// sits at the origin, no cell lies below it, the others reach at most
+// `cellCount - 1` steps away. Given in scene axes.
+function roomOfPolycubes(cellCount) {
+  const reach = cellCount - 1 + CUBE_SIDE / 2;
+  return new THREE.Box3(
+    new THREE.Vector3(-reach, -CUBE_SIDE / 2, -reach),
+    new THREE.Vector3(reach, reach, reach),
+  );
+}
+
 // `placementProgress` runs from 0 (first cell placed) to 1 (last one).
-function buildCube([x, y, z], placementProgress) {
-  const geometry = new THREE.BoxGeometry(CUBE_SIDE, CUBE_SIDE, CUBE_SIDE);
+function buildPlacedCube(cell, placementIndex, placementProgress) {
   const colour = new THREE.Color(FIRST_CELL_COLOUR).lerp(
     new THREE.Color(LAST_CELL_COLOUR),
     placementProgress,
   );
-  const cube = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: colour }));
-  const edges = new THREE.LineSegments(
+  const cube = buildCube(cell, CUBE_SIDE, new THREE.MeshStandardMaterial({ color: colour }));
+  cube.add(buildEdges(cube.geometry, EDGE_COLOUR));
+  cube.userData.placementIndex = placementIndex;
+  return cube;
+}
+
+// A cell waiting to extend the polycube: a small see-through cube.
+function buildCandidateCube(cell) {
+  const material = new THREE.MeshStandardMaterial({
+    color: CANDIDATE_COLOUR,
+    transparent: true,
+    opacity: CANDIDATE_OPACITY,
+    depthWrite: false,
+  });
+  const cube = buildCube(cell, CANDIDATE_SIDE, material);
+  cube.add(buildEdges(cube.geometry, CANDIDATE_COLOUR));
+  return cube;
+}
+
+// A cell the polycube may no longer hold: an empty cage.
+function buildDiscardedCube(cell) {
+  const geometry = new THREE.BoxGeometry(DISCARDED_SIDE, DISCARDED_SIDE, DISCARDED_SIDE);
+  const cage = buildEdges(geometry, DISCARDED_COLOUR);
+  geometry.dispose();
+  placeInScene(cage, cell);
+  return cage;
+}
+
+function buildCube(cell, side, material) {
+  const cube = new THREE.Mesh(new THREE.BoxGeometry(side, side, side), material);
+  placeInScene(cube, cell);
+  return cube;
+}
+
+function buildEdges(geometry, colour) {
+  return new THREE.LineSegments(
     new THREE.EdgesGeometry(geometry),
-    new THREE.LineBasicMaterial({ color: EDGE_COLOUR }),
+    new THREE.LineBasicMaterial({ color: colour }),
   );
-  cube.add(edges);
+}
+
+// Starts hidden: `showFirstCubes` decides what is seen and makes it grow.
+function placeInScene(object, [x, y, z]) {
   // The lattice has z upwards, Three.js has y upwards: a quarter turn about
   // x, not an axis swap, so that mirror images are not exchanged.
-  cube.position.set(x, z, -y);
-  cube.visible = false;
-  return cube;
+  object.position.set(x, z, -y);
+  object.visible = false;
 }
 
 customElements.define("polycube-scene", PolycubeScene);

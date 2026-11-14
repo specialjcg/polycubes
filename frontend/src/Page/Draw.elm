@@ -71,7 +71,7 @@ view : Model -> Html Msg
 view model =
     div []
         [ div [ Attr.class "controls" ]
-            [ CellCountSlider.view CellCountChosen model.cellCount
+            [ CellCountSlider.view CellCountSlider.largestDrawnCellCount CellCountChosen model.cellCount
             , button [ onClick DrawRequested ] [ text "Tirer un autre" ]
             ]
         , viewDraw model.draw

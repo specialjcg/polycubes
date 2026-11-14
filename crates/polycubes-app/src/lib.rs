@@ -4,11 +4,13 @@
 //! serialise the result.
 
 pub mod drawing;
+pub mod enumeration;
 pub mod growth;
 
 use std::sync::Mutex;
 
 use drawing::{CellCount, DrawnPolycube, PolycubeDrawer};
+use enumeration::TracedStep;
 use growth::GrowthComparison;
 
 /// Draws a fixed polycube of `cell_count` cells uniformly at random.
@@ -48,6 +50,13 @@ fn compare_growths(
     .map_err(|error| error.to_string())
 }
 
+/// Traces the enumeration of the fixed polycubes of at most `cell_count`
+/// cells, node by node.
+#[tauri::command(async)]
+fn trace_enumeration(cell_count: usize) -> Result<Vec<TracedStep>, String> {
+    enumeration::trace_enumeration(cell_count).map_err(|error| error.to_string())
+}
+
 /// Runs the desktop application until its window is closed.
 ///
 /// # Panics
@@ -58,7 +67,8 @@ pub fn run() {
         .manage(Mutex::new(PolycubeDrawer::default()))
         .invoke_handler(tauri::generate_handler![
             draw_uniform_polycube,
-            compare_growths
+            compare_growths,
+            trace_enumeration
         ])
         .run(tauri::generate_context!())
         .expect("the desktop application failed to start");

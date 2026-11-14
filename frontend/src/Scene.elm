@@ -1,4 +1,4 @@
-module Scene exposing (view, viewFirstCells)
+module Scene exposing (view, viewAmongNeighbours, viewFirstCells)
 
 {-| The 3D view of a polycube, drawn by the `polycube-scene` custom element
 (`public/polycube-scene.js`).
@@ -7,7 +7,7 @@ module Scene exposing (view, viewFirstCells)
 import Html exposing (Html)
 import Html.Attributes as Attr
 import Json.Encode as Encode
-import Polycube exposing (Polycube)
+import Polycube exposing (Cell, Polycube)
 
 
 view : Polycube -> Html msg
@@ -27,6 +27,26 @@ viewFirstCells shownCellCount polycube =
         []
 
 
+{-| Shows a polycube with the cells waiting to extend it and those it may
+no longer hold, framed for the largest polycube to come, so that the view
+does not move from one polycube to the next.
+-}
+viewAmongNeighbours : { largestCellCount : Int, candidates : List Cell, discarded : List Cell } -> Polycube -> Html msg
+viewAmongNeighbours neighbours polycube =
+    Html.node "polycube-scene"
+        [ Attr.attribute "extent" (String.fromInt neighbours.largestCellCount)
+        , cellsAttribute polycube
+        , encodedCellsAttribute "candidates" neighbours.candidates
+        , encodedCellsAttribute "discarded" neighbours.discarded
+        ]
+        []
+
+
 cellsAttribute : Polycube -> Html.Attribute msg
 cellsAttribute polycube =
-    Attr.attribute "cells" (Encode.encode 0 (Polycube.encodeCells polycube))
+    encodedCellsAttribute "cells" polycube
+
+
+encodedCellsAttribute : String -> List Cell -> Html.Attribute msg
+encodedCellsAttribute name cells =
+    Attr.attribute name (Encode.encode 0 (Polycube.encodeCells cells))

@@ -1,11 +1,14 @@
 port module Backend exposing
     ( DrawnPolycube
+    , EnumerationStep
     , GrownPolycube
     , GrowthComparison
     , drawFinished
+    , enumerationTraceFinished
     , growthComparisonFinished
     , ready
     , requestDraw
+    , requestEnumerationTrace
     , requestGrowthComparison
     )
 
@@ -13,7 +16,7 @@ port module Backend exposing
 -}
 
 import Json.Decode as Decode exposing (Decoder)
-import Polycube exposing (Polycube)
+import Polycube exposing (Cell, Polycube)
 
 
 {-| A polycube drawn uniformly among the fixed polycubes of its size.
@@ -46,6 +49,18 @@ type alias GrowthComparison =
     }
 
 
+{-| One polycube met by the enumeration, with what the enumeration holds
+when it reaches it: the cells waiting to extend it, the cells it may no
+longer hold, and how many polycubes of each size were found so far.
+-}
+type alias EnumerationStep =
+    { placed : Polycube
+    , candidates : List Cell
+    , discarded : List Cell
+    , countsBySize : List Int
+    }
+
+
 {-| Fires once `public/backend.js` listens to the requests. A request sent
 earlier, from `init` for instance, would be lost.
 -}
@@ -66,6 +81,20 @@ port requestGrowthComparison : Int -> Cmd msg
 
 
 port growthComparisonFinishedPort : (Decode.Value -> msg) -> Sub msg
+
+
+{-| Asks for every step of the enumeration of the polycubes of at most the
+given size.
+-}
+port requestEnumerationTrace : Int -> Cmd msg
+
+
+port enumerationTraceFinishedPort : (Decode.Value -> msg) -> Sub msg
+
+
+enumerationTraceFinished : (Result String (List EnumerationStep) -> msg) -> Sub msg
+enumerationTraceFinished toMsg =
+    enumerationTraceFinishedPort (decodeResult (Decode.list enumerationStepDecoder) >> toMsg)
 
 
 drawFinished : (Result String DrawnPolycube -> msg) -> Sub msg
@@ -115,3 +144,16 @@ grownPolycubeDecoder =
     Decode.map2 GrownPolycube
         (Decode.field "cells" (Decode.list Polycube.cellDecoder))
         (Decode.field "boundingBox" (Decode.list Decode.int))
+
+
+enumerationStepDecoder : Decoder EnumerationStep
+enumerationStepDecoder =
+    let
+        cellsDecoder =
+            Decode.list Polycube.cellDecoder
+    in
+    Decode.map4 EnumerationStep
+        (Decode.field "placed" cellsDecoder)
+        (Decode.field "candidates" cellsDecoder)
+        (Decode.field "discarded" cellsDecoder)
+        (Decode.field "countsBySize" (Decode.list Decode.int))
