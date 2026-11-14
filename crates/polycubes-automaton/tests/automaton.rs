@@ -139,3 +139,39 @@ fn the_census_tells_the_square_from_the_other_tetracubes() {
     assert_eq!(found.still, 3);
     assert_eq!(found.dying, 83);
 }
+
+/// Fredkin's parity rule: a cell lives when an odd number of its six
+/// neighbours do.
+fn parity_rule() -> Rule {
+    rule(Neighbourhood::Faces, &[1, 3, 5], &[1, 3, 5])
+}
+
+fn six_copies(seed: &[Coordinates], distance: i32) -> Vec<Coordinates> {
+    let mut copies = Vec::new();
+    for axis in 0..3 {
+        for direction in [-1, 1] {
+            for cell in seed {
+                let mut moved = *cell;
+                moved[axis] += direction * distance;
+                copies.push(moved);
+            }
+        }
+    }
+    copies.sort_unstable();
+    copies
+}
+
+#[test]
+fn the_parity_rule_copies_a_polycube_six_times_at_each_power_of_two() {
+    // A tetracube that leaves the plane, narrower than the distances tried.
+    let seed = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [1, 1, 1]];
+    let limits = Limits {
+        generation_count: 8,
+        population: 10_000,
+    };
+
+    let evolution = evolve(&seed, &parity_rule(), limits);
+
+    assert_eq!(evolution.generations[4], six_copies(&seed, 4));
+    assert_eq!(evolution.generations[8], six_copies(&seed, 8));
+}
