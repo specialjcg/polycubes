@@ -1,11 +1,9 @@
 port module Backend exposing
-    ( AutomatonCensus
-    , AutomatonRun
+    ( AutomatonRun
     , ClosedFormComparison
     , DrawnPolycube
     , ExposedFaceHistograms
     , ExtensionSize
-    , Fate(..)
     , Gallery
     , EnumerationStep
     , GrownPolycube
@@ -13,7 +11,6 @@ port module Backend exposing
     , RemarkablePolycubes
     , RemarkableShape
     , ShapeFamily
-    , automatonCensusFinished
     , automatonRunFinished
     , closedFormComparisonFinished
     , drawFinished
@@ -22,7 +19,6 @@ port module Backend exposing
     , growthComparisonFinished
     , remarkableFinished
     , ready
-    , requestAutomatonCensus
     , requestAutomatonRun
     , requestClosedFormComparison
     , requestDraw
@@ -159,34 +155,13 @@ type alias RemarkableShape =
     }
 
 
-{-| The generations of a cellular automaton, the seed first, and what
-becomes of that seed.
+{-| The generations of a polycube that grows, the seed first, and two
+opposite corners of the box holding them all.
 -}
 type alias AutomatonRun =
     { generations : List (List Cell)
-    , fate : Fate
-    }
-
-
-{-| The integer is the generation where the final behaviour starts; cycles
-and travels also carry their period.
--}
-type Fate
-    = Dies Int
-    | Still Int
-    | Cycles Int Int
-    | Travels Int Int
-    | Unsettled
-
-
-{-| Fixed polycubes of a size per fate, each taken as a seed.
--}
-type alias AutomatonCensus =
-    { dying : Int
-    , still : Int
-    , cycling : Int
-    , travelling : Int
-    , unsettled : Int
+    , lowestCorner : Cell
+    , highestCorner : Cell
     }
 
 
@@ -389,7 +364,7 @@ remarkableShapeDecoder =
 
 
 {-| Asks for a seed and its generations. The request holds `cellCount`,
-`seedKind` and `rule`, as the backend names them.
+`seedKind` and `mode`, as the backend names them.
 -}
 port requestAutomatonRunPort : Encode.Value -> Cmd msg
 
@@ -397,13 +372,13 @@ port requestAutomatonRunPort : Encode.Value -> Cmd msg
 port automatonRunFinishedPort : (Decode.Value -> msg) -> Sub msg
 
 
-requestAutomatonRun : { cellCount : Int, seedKind : String, rule : String } -> Cmd msg
+requestAutomatonRun : { cellCount : Int, seedKind : String, mode : String } -> Cmd msg
 requestAutomatonRun request =
     requestAutomatonRunPort
         (Encode.object
             [ ( "cellCount", Encode.int request.cellCount )
             , ( "seedKind", Encode.string request.seedKind )
-            , ( "rule", Encode.string request.rule )
+            , ( "mode", Encode.string request.mode )
             ]
         )
 
@@ -413,73 +388,9 @@ automatonRunFinished toMsg =
     automatonRunFinishedPort (decodeResult automatonRunDecoder >> toMsg)
 
 
-{-| Asks for the fates of all polycubes of a size under a rule.
--}
-port requestAutomatonCensusPort : Encode.Value -> Cmd msg
-
-
-port automatonCensusFinishedPort : (Decode.Value -> msg) -> Sub msg
-
-
-requestAutomatonCensus : { cellCount : Int, rule : String } -> Cmd msg
-requestAutomatonCensus request =
-    requestAutomatonCensusPort
-        (Encode.object
-            [ ( "cellCount", Encode.int request.cellCount )
-            , ( "rule", Encode.string request.rule )
-            ]
-        )
-
-
-automatonCensusFinished : (Result String AutomatonCensus -> msg) -> Sub msg
-automatonCensusFinished toMsg =
-    automatonCensusFinishedPort (decodeResult automatonCensusDecoder >> toMsg)
-
-
 automatonRunDecoder : Decoder AutomatonRun
 automatonRunDecoder =
-    Decode.map2 AutomatonRun
+    Decode.map3 AutomatonRun
         (Decode.field "generations" (Decode.list cellsDecoder))
-        (Decode.field "fate" fateDecoder)
-
-
-fateDecoder : Decoder Fate
-fateDecoder =
-    let
-        generation =
-            Decode.field "generation" Decode.int
-
-        period =
-            Decode.field "period" Decode.int
-
-        ofKind kind =
-            case kind of
-                "dies" ->
-                    Decode.map Dies generation
-
-                "still" ->
-                    Decode.map Still generation
-
-                "cycles" ->
-                    Decode.map2 Cycles generation period
-
-                "travels" ->
-                    Decode.map2 Travels generation period
-
-                "unsettled" ->
-                    Decode.succeed Unsettled
-
-                _ ->
-                    Decode.fail ("unknown fate: " ++ kind)
-    in
-    Decode.field "kind" Decode.string |> Decode.andThen ofKind
-
-
-automatonCensusDecoder : Decoder AutomatonCensus
-automatonCensusDecoder =
-    Decode.map5 AutomatonCensus
-        (Decode.field "dying" Decode.int)
-        (Decode.field "still" Decode.int)
-        (Decode.field "cycling" Decode.int)
-        (Decode.field "travelling" Decode.int)
-        (Decode.field "unsettled" Decode.int)
+        (Decode.field "lowestCorner" Polycube.cellDecoder)
+        (Decode.field "highestCorner" Polycube.cellDecoder)

@@ -5,7 +5,8 @@
 // drawn as cubes of another colour: an extension of the polycube.
 // `extent="n"` frames
 // the room every polycube of at most n cells fits in, so that the view stays
-// still while the polycube changes.
+// still while the polycube changes. `framed="[[x,y,z],[x,y,z]]"` frames the
+// box between two opposite corner cells instead, for cells that spread far.
 // The Elm application owns the state; this element only draws what its
 // attributes describe.
 import * as THREE from "three";
@@ -25,6 +26,9 @@ const ADDED_COLOUR = 0x3b6fb5;
 // stay near the first cell, so framing the whole room would shrink them;
 // only the straightest ones graze the border.
 const FRAMED_ROOM_SHARE = 0.6;
+// Share of the sphere around a `framed` box that the camera frames: cells
+// seldom reach the corners of the box, so the whole sphere would shrink them.
+const FRAMED_BOX_SHARE = 0.7;
 const FIELD_OF_VIEW_DEGREES = 40;
 const CAMERA_DIRECTION = new THREE.Vector3(1.2, 0.9, 1.6).normalize();
 const CAMERA_MARGIN = 1.15;
@@ -32,7 +36,15 @@ const APPEARANCE_MILLISECONDS = 260;
 const SMALLEST_VISIBLE_SCALE = 0.001;
 
 class PolycubeScene extends HTMLElement {
-  static observedAttributes = ["cells", "shown", "candidates", "discarded", "added", "extent"];
+  static observedAttributes = [
+    "cells",
+    "shown",
+    "candidates",
+    "discarded",
+    "added",
+    "extent",
+    "framed",
+  ];
 
   connectedCallback() {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -184,19 +196,31 @@ class PolycubeScene extends HTMLElement {
   // all. With an `extent` the camera is set once and then left to the user.
   frame() {
     const extentAttribute = this.getAttribute("extent");
-    if (extentAttribute !== null && extentAttribute === this.framedExtent) {
+    const framedAttribute = this.getAttribute("framed");
+    // A fixed frame is set once per value, then the camera is the user's.
+    const fixedFrame = framedAttribute ?? extentAttribute;
+    if (fixedFrame !== null && fixedFrame === this.fixedFrame) {
       return;
     }
-    this.framedExtent = extentAttribute;
-    const bounds =
-      extentAttribute === null
-        ? new THREE.Box3().setFromObject(this.cubes)
-        : roomOfPolycubes(Number(extentAttribute));
+    this.fixedFrame = fixedFrame;
+    let bounds;
+    if (framedAttribute !== null) {
+      bounds = boxBetweenCells(JSON.parse(framedAttribute));
+    } else if (extentAttribute !== null) {
+      bounds = roomOfPolycubes(Number(extentAttribute));
+    } else {
+      bounds = new THREE.Box3().setFromObject(this.cubes);
+    }
     if (bounds.isEmpty()) {
       return;
     }
     const centre = bounds.getCenter(new THREE.Vector3());
-    const framedShare = extentAttribute === null ? 1 : FRAMED_ROOM_SHARE;
+    let framedShare = 1;
+    if (framedAttribute !== null) {
+      framedShare = FRAMED_BOX_SHARE;
+    } else if (extentAttribute !== null) {
+      framedShare = FRAMED_ROOM_SHARE;
+    }
     const radius = (bounds.getSize(new THREE.Vector3()).length() / 2) * framedShare;
     const halfFieldOfView = THREE.MathUtils.degToRad(FIELD_OF_VIEW_DEGREES / 2);
     const distance = (radius / Math.sin(halfFieldOfView)) * CAMERA_MARGIN;
@@ -214,6 +238,16 @@ function roomOfPolycubes(cellCount) {
     new THREE.Vector3(-reach, -CUBE_SIDE / 2, -reach),
     new THREE.Vector3(reach, reach, reach),
   );
+}
+
+// Box holding every cube between two opposite corner cells, in the scene's
+// axes: see `placeInScene` for the turn from lattice to scene.
+function boxBetweenCells(cornerCells) {
+  const box = new THREE.Box3();
+  for (const [x, y, z] of cornerCells) {
+    box.expandByPoint(new THREE.Vector3(x, z, -y));
+  }
+  return box.expandByScalar(CUBE_SIDE / 2);
 }
 
 // `placementProgress` runs from 0 (first cell placed) to 1 (last one).

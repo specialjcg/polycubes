@@ -13,7 +13,7 @@ pub mod remarkable;
 
 use std::sync::Mutex;
 
-use automaton::{AutomatonRun, CensusReport, RulePreset, SeedKind};
+use automaton::{AutomatonRun, GrowthMode, SeedKind};
 use closed_form::ClosedFormComparison;
 use drawing::{CellCount, DrawnPolycube, PolycubeDrawer};
 use enumeration::TracedStep;
@@ -100,12 +100,12 @@ fn find_remarkable(cell_count: usize) -> Result<RemarkablePolycubes, String> {
     remarkable::find_remarkable(cell_count).map_err(|error| error.to_string())
 }
 
-/// Picks a seed of `cell_count` cells and runs the automaton from it.
+/// Picks a seed of `cell_count` cells and makes it grow.
 #[tauri::command(async)]
 fn run_automaton(
     cell_count: usize,
     seed_kind: SeedKind,
-    rule: RulePreset,
+    mode: GrowthMode,
     drawer: tauri::State<'_, Mutex<PolycubeDrawer>>,
 ) -> Result<AutomatonRun, String> {
     automaton::check_seed_cell_count(cell_count).map_err(|error| error.to_string())?;
@@ -134,13 +134,14 @@ fn run_automaton(
             .map(|shape| shape.cells)
             .ok_or_else(|| "no polycube of that size".to_owned())?,
     };
-    Ok(automaton::run_automaton(&seed, rule))
-}
-
-/// Runs the automaton from every fixed polycube of `cell_count` cells.
-#[tauri::command(async)]
-fn census_automaton(cell_count: usize, rule: RulePreset) -> Result<CensusReport, String> {
-    automaton::take_census(cell_count, rule).map_err(|error| error.to_string())
+    Ok(match mode {
+        GrowthMode::Replicator => automaton::replicate(&seed),
+        GrowthMode::Colony => automaton::grow(
+            &seed,
+            || rand::random_bool(automaton::COLONY_DIVISION_CHANCE),
+            |free_neighbour_count| rand::random_range(0..free_neighbour_count),
+        ),
+    })
 }
 
 /// Runs the desktop application until its window is closed.
@@ -158,8 +159,7 @@ pub fn run() {
             compare_closed_form,
             build_gallery,
             find_remarkable,
-            run_automaton,
-            census_automaton
+            run_automaton
         ])
         .run(tauri::generate_context!())
         .expect("the desktop application failed to start");

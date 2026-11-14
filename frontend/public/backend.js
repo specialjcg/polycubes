@@ -33,11 +33,6 @@ const relayedRequests = [
     request: "requestAutomatonRunPort",
     result: "automatonRunFinishedPort",
   },
-  {
-    command: "census_automaton",
-    request: "requestAutomatonCensusPort",
-    result: "automatonCensusFinishedPort",
-  },
 ];
 
 function relay(command, request, result, toArguments) {

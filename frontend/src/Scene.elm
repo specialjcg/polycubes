@@ -1,4 +1,4 @@
-module Scene exposing (view, viewAmongNeighbours, viewFirstCells)
+module Scene exposing (view, viewAmongNeighbours, viewFirstCells, viewFramed)
 
 {-| The 3D view of a polycube, drawn by the `polycube-scene` custom element
 (`public/polycube-scene.js`).
@@ -42,6 +42,18 @@ viewAmongNeighbours neighbours polycube =
         , encodedCellsAttribute "candidates" neighbours.candidates
         , encodedCellsAttribute "discarded" neighbours.discarded
         , encodedCellsAttribute "added" neighbours.added
+        ]
+        []
+
+
+{-| Shows cells in a view framed once on the box between two opposite
+corner cells, so that it stays still while the cells spread.
+-}
+viewFramed : { lowestCorner : Cell, highestCorner : Cell } -> List Cell -> Html msg
+viewFramed frame cells =
+    Html.node "polycube-scene"
+        [ encodedCellsAttribute "framed" [ frame.lowestCorner, frame.highestCorner ]
+        , cellsAttribute cells
         ]
         []
 
