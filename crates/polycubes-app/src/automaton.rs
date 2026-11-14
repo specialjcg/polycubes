@@ -1,8 +1,8 @@
 //! Polycubes that grow generation after generation, for the frontend.
 
 use polycubes_automaton::{
-    PolycubeLifeRule, PolycubeWorld, aggregate, grow_by_budding, grow_by_mutating_buds,
-    live_as_polycubes,
+    PolycubeLifeRule, PolycubeWorld, aggregate, canonical_shape, grow_by_budding,
+    grow_by_mutating_buds, live_as_polycubes,
 };
 use polycubes_core::Coordinates;
 use serde::{Deserialize, Serialize};
@@ -30,17 +30,20 @@ const MUTATION_POLYCUBE_LIMIT: usize = 60;
 pub const BUDDING_CHANCE: f64 = 0.5;
 
 /// Measured on seeds of five cells, against seven other settings: this one
-/// had the most deaths, some 200 over 30 generations.
+/// had the most deaths, some 200 over 30 generations. One child in five
+/// mutates: often enough for the 29 shapes of five cells to show up, seldom
+/// enough for a shape that fares well to spread.
 const LIFE_RULE: PolycubeLifeRule = PolycubeLifeRule {
     most_neighbours_to_survive: 2,
     fewest_neighbours_to_be_born: 1,
     most_neighbours_to_be_born: 2,
+    mutation_one_in: 5,
 };
 
 /// The world is a cube of 11 cells a side around the seed: births go on
 /// wherever room is left in it, so the game never freezes.
 const LIFE_WORLD: PolycubeWorld = PolycubeWorld {
-    generation_count: 30,
+    generation_count: 200,
     reach: 5,
 };
 
@@ -81,6 +84,8 @@ pub enum GrowthMode {
 /// birth rank of the parent of each, the seed being its own.
 /// `identities_by_generation` is filled when polycubes die: for each
 /// generation, what tells each of its polycubes from all others.
+/// `shapes_by_generation` comes with it: for each polycube, a number shared
+/// by all those of its shape, however turned, over the whole run.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomatonRun {
@@ -89,6 +94,7 @@ pub struct AutomatonRun {
     pub highest_corner: Coordinates,
     pub parent_of_copy: Vec<usize>,
     pub identities_by_generation: Vec<Vec<usize>>,
+    pub shapes_by_generation: Vec<Vec<usize>>,
 }
 
 impl AutomatonRun {
@@ -101,6 +107,7 @@ impl AutomatonRun {
             generations,
             parent_of_copy: Vec::new(),
             identities_by_generation: Vec::new(),
+            shapes_by_generation: Vec::new(),
         }
     }
 }
@@ -179,17 +186,37 @@ pub fn aggregate_wanderers(
 
 /// Plays the game of life of whole polycubes from `seed`: one dies when
 /// more than two others lean on it, one is born against one or two of the
-/// living. `buds` and `choose` stand for the random choices of each.
+/// living, with the shape of its parent or, one time in five, that shape
+/// with one cell moved. `buds` and `choose` stand for the random choices of each.
 #[must_use]
 pub fn live(
     seed: &[Coordinates],
     buds: impl FnMut() -> bool,
     choose: impl FnMut(usize) -> usize,
 ) -> AutomatonRun {
-    let generations = live_as_polycubes(seed, LIFE_RULE, LIFE_WORLD, buds, choose);
+    live_in(LIFE_WORLD, seed, buds, choose)
+}
+
+fn live_in(
+    world: PolycubeWorld,
+    seed: &[Coordinates],
+    buds: impl FnMut() -> bool,
+    choose: impl FnMut(usize) -> usize,
+) -> AutomatonRun {
+    let generations = live_as_polycubes(seed, LIFE_RULE, world, buds, choose);
     let identities_by_generation = generations
         .iter()
         .map(|living| living.iter().map(|polycube| polycube.identity).collect())
+        .collect();
+    let mut shape_ranks = ShapeRanks::default();
+    let shapes_by_generation = generations
+        .iter()
+        .map(|living| {
+            living
+                .iter()
+                .map(|polycube| shape_ranks.rank_of(&polycube.cells))
+                .collect()
+        })
         .collect();
     let cells_by_generation = generations
         .into_iter()
@@ -202,7 +229,24 @@ pub fn live(
         .collect();
     AutomatonRun {
         identities_by_generation,
+        shapes_by_generation,
         ..AutomatonRun::of(cells_by_generation)
+    }
+}
+
+/// Numbers the shapes in the order they are first met.
+#[derive(Default)]
+struct ShapeRanks {
+    rank_by_shape: std::collections::HashMap<Vec<Coordinates>, usize>,
+}
+
+impl ShapeRanks {
+    fn rank_of(&mut self, cells: &[Coordinates]) -> usize {
+        let next_rank = self.rank_by_shape.len();
+        *self
+            .rank_by_shape
+            .entry(canonical_shape(cells))
+            .or_insert(next_rank)
     }
 }
 
@@ -272,14 +316,32 @@ mod tests {
 
     #[test]
     fn life_tells_every_polycube_of_every_generation_apart() {
-        let run = live(&SEED, || true, varied_choice());
+        // A small world played briefly: the real one takes minutes unoptimised.
+        let world = PolycubeWorld {
+            generation_count: 14,
+            reach: 3,
+        };
+        let run = live_in(world, &SEED, || true, varied_choice());
 
-        assert_eq!(run.generations.len(), LIFE_WORLD.generation_count + 1);
+        assert_eq!(run.generations.len(), world.generation_count + 1);
         assert_eq!(run.identities_by_generation.len(), run.generations.len());
         for (cells, identities) in run.generations.iter().zip(&run.identities_by_generation) {
             assert_eq!(cells.len(), identities.len() * SEED.len());
             assert!(identities.is_sorted_by(|earlier, later| earlier < later));
         }
+        assert_eq!(run.shapes_by_generation[0], [0]);
+        let shape_count_by_generation: Vec<usize> =
+            run.shapes_by_generation.iter().map(Vec::len).collect();
+        let polycube_count_by_generation: Vec<usize> =
+            run.identities_by_generation.iter().map(Vec::len).collect();
+        assert_eq!(shape_count_by_generation, polycube_count_by_generation);
+        let last_shapes: std::collections::HashSet<&usize> = run
+            .shapes_by_generation
+            .last()
+            .into_iter()
+            .flatten()
+            .collect();
+        assert!(last_shapes.len() > 1, "no shape but the seed's");
     }
 
     #[test]

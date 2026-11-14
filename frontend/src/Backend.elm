@@ -159,7 +159,8 @@ type alias RemarkableShape =
 opposite corners of the box holding them all. `parentOfCopy` is filled when
 the generations list polycubes that bore one another: the birth rank of the
 parent of each. `identitiesByGeneration` is filled when polycubes die: for
-each generation, what tells each of its polycubes from all others.
+each generation, what tells each of its polycubes from all others ; and
+`shapesByGeneration` with it: a number shared by all polycubes of one shape.
 -}
 type alias AutomatonRun =
     { generations : List (List Cell)
@@ -167,6 +168,7 @@ type alias AutomatonRun =
     , highestCorner : Cell
     , parentOfCopy : List Int
     , identitiesByGeneration : List (List Int)
+    , shapesByGeneration : List (List Int)
     }
 
 
@@ -395,9 +397,10 @@ automatonRunFinished toMsg =
 
 automatonRunDecoder : Decoder AutomatonRun
 automatonRunDecoder =
-    Decode.map5 AutomatonRun
+    Decode.map6 AutomatonRun
         (Decode.field "generations" (Decode.list cellsDecoder))
         (Decode.field "lowestCorner" Polycube.cellDecoder)
         (Decode.field "highestCorner" Polycube.cellDecoder)
         (Decode.field "parentOfCopy" (Decode.list Decode.int))
         (Decode.field "identitiesByGeneration" (Decode.list (Decode.list Decode.int)))
+        (Decode.field "shapesByGeneration" (Decode.list (Decode.list Decode.int)))

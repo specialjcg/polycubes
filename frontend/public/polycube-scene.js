@@ -12,7 +12,8 @@
 // the birth rank of the parent of each copy, a colour close to its parent's. `age-span="n"` tells that the
 // cells come in birth order, n at most: they run through the rainbow, the
 // eldest red, the youngest violet. `copy-ids="[...]"` gives what tells each copy
-// from all others: it keeps its cubes and its colour while others die.
+// from all others: it keeps its cubes while others die. `copy-shapes="[...]"`
+// then gives the shape of each copy, one colour per shape.
 // The Elm application owns the state; this element only draws what its
 // attributes describe.
 import * as THREE from "three";
@@ -65,6 +66,7 @@ class PolycubeScene extends HTMLElement {
     "age-span",
     "copy-parents",
     "copy-ids",
+    "copy-shapes",
   ];
 
   connectedCallback() {
@@ -159,6 +161,7 @@ class PolycubeScene extends HTMLElement {
     const ageSpan = Number(this.getAttribute("age-span") ?? 0);
     const hueOfCopy = huesAlongLineages(this.intsOf("copy-parents"));
     const identityOfCopy = this.intsOf("copy-ids");
+    const shapeOfCopy = this.intsOf("copy-shapes");
     const colouringName = `${copySize} ${ageSpan} ${hueOfCopy.length > 0}`;
     const builderByKey = new Map();
     placedCells.forEach((cell, placementIndex) => {
@@ -166,7 +169,7 @@ class PolycubeScene extends HTMLElement {
       const identity = identityOfCopy[copyIndex];
       const colourOf = () => {
         if (identity !== undefined) {
-          return colourOfHue(identity * COPY_HUE_STEP);
+          return colourOfHue((shapeOfCopy[copyIndex] ?? identity) * COPY_HUE_STEP);
         }
         if (copySize > 0) {
           return colourOfHue(hueOfCopy[copyIndex] ?? copyIndex * COPY_HUE_STEP);

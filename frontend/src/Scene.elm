@@ -49,15 +49,15 @@ viewAmongNeighbours neighbours polycube =
 {-| How the cells of a framed view are coloured. `ByCopy n` : the cells list
 copies of one polycube, `n` cells each, and every copy gets its own colour.
 `ByLineage n parents` : copies again, but each takes after the colour of its
-parent, whose birth rank `parents` gives. `ByIdentity n identities` : copies
-again, each coloured after its identity, so that it keeps its colour while
-others come and go. `ByAge n` : the cells come in birth order, `n` at most,
+parent, whose birth rank `parents` gives. `ByIdentity n identities shapes` :
+copies again, told apart by their identity so that each stays in place while
+others come and go, and coloured after their shape: one colour per shape. `ByAge n` : the cells come in birth order, `n` at most,
 and run through the rainbow.
 -}
 type Colouring
     = ByCopy Int
     | ByLineage Int (List Int)
-    | ByIdentity Int (List Int)
+    | ByIdentity Int (List Int) (List Int)
     | ByAge Int
 
 
@@ -83,8 +83,11 @@ colouringAttributes colouring =
         ByLineage cellsPerCopy parentOfCopy ->
             [ copySizeAttribute cellsPerCopy, encodedIntsAttribute "copy-parents" parentOfCopy ]
 
-        ByIdentity cellsPerCopy identities ->
-            [ copySizeAttribute cellsPerCopy, encodedIntsAttribute "copy-ids" identities ]
+        ByIdentity cellsPerCopy identities shapes ->
+            [ copySizeAttribute cellsPerCopy
+            , encodedIntsAttribute "copy-ids" identities
+            , encodedIntsAttribute "copy-shapes" shapes
+            ]
 
         ByAge largestCellCount ->
             [ Attr.attribute "age-span" (String.fromInt largestCellCount) ]

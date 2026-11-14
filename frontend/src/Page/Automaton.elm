@@ -9,6 +9,7 @@ life, whole polycubes die of crowding while others are born beside them.
 
 import Backend exposing (AutomatonRun)
 import CellCountSlider
+import Dict
 import Html exposing (Html, button, div, p, span, text)
 import Html.Attributes as Attr
 import Html.Events exposing (onClick)
@@ -28,9 +29,16 @@ initialCellCount =
     5
 
 
-millisecondsBetweenGenerations : Float
-millisecondsBetweenGenerations =
-    800
+{-| Life plays some two hundred generations, the others a few dozen.
+-}
+millisecondsBetweenGenerations : Mode -> Float
+millisecondsBetweenGenerations mode =
+    case mode of
+        Life ->
+            250
+
+        _ ->
+            800
 
 
 {-| Generations the last one stays on screen before the seed comes back.
@@ -214,7 +222,7 @@ subscriptions model =
         [ Backend.automatonRunFinished RunFinished
         , case ( model.run, model.isPlaying ) of
             ( Ran _, True ) ->
-                Time.every millisecondsBetweenGenerations (\_ -> GenerationInterval)
+                Time.every (millisecondsBetweenGenerations model.mode) (\_ -> GenerationInterval)
 
             _ ->
                 Sub.none
@@ -257,7 +265,7 @@ explain mode =
             "Comme le givre ou le corail : des copies du polycube, tournées au hasard, arrivent de loin en errant case par case et se collent là où elles touchent l'amas pour la première fois. Les pointes attrapent les arrivants avant les creux, d'où les branches. Les couleurs suivent l'ordre d'arrivée : rouge pour les premiers, violet pour les derniers."
 
         Life ->
-            "Un jeu de la vie dont la cellule est un polycube entier. À chaque génération, tous en même temps : un polycube meurt si plus de deux autres le touchent ; un polycube sur deux fait naître une copie tournée de lui-même, là où elle touchera un ou deux vivants. Chaque polycube garde sa forme et sa couleur de sa naissance à sa mort. Le monde est un cube de 11 cases de côté."
+            "Un jeu de la vie dont la cellule est un polycube entier. À chaque génération, tous en même temps : un polycube meurt si plus de deux autres le touchent ; un polycube sur deux fait naître un enfant là où il touchera un ou deux vivants. L'enfant a la forme du parent, sauf une fois sur cinq où un cube est déplacé. Une couleur par forme : on voit lesquelles envahissent le monde, un cube de 11 cases de côté, et lesquelles disparaissent."
 
         Mutation ->
             "À chaque génération, un polycube sur deux tente de bourgeonner : l'enfant est le parent avec un cube déplacé, tourné au hasard, et naît contre lui sans toucher aucun autre. Les formes dérivent le long des branches ; chaque enfant prend une couleur proche de celle de son parent."
@@ -313,12 +321,34 @@ viewRun run =
                             ++ " polycubes, "
                             ++ String.fromInt (List.length living)
                             ++ " cellules"
+                            ++ describeShapes (at shownGeneration played.run.shapesByGeneration)
                         )
                     ]
                 ]
 
         Failed reason ->
             p [ Attr.class "status error" ] [ text ("Croissance impossible : " ++ reason) ]
+
+
+{-| How many shapes live, and how much room the commonest takes: empty when
+shapes are not told.
+-}
+describeShapes : List Int -> String
+describeShapes shapes =
+    let
+        countByShape =
+            List.foldl (\shape -> Dict.update shape (Maybe.withDefault 0 >> (+) 1 >> Just)) Dict.empty shapes
+    in
+    case List.maximum (Dict.values countByShape) of
+        Just commonestCount ->
+            " ; "
+                ++ String.fromInt (Dict.size countByShape)
+                ++ " formes, la plus répandue : "
+                ++ String.fromInt (100 * commonestCount // List.length shapes)
+                ++ " %"
+
+        Nothing ->
+            ""
 
 
 {-| The list at `index`, empty when there is none.
@@ -330,7 +360,7 @@ at index lists =
 
 {-| An aggregate lists its cells in the order they came, so they are
 coloured by age. Life tells its polycubes apart generation by generation, so
-that each keeps its colour while others die. Mutants take after their
+that each stays in place while others die, and colours them by shape. Mutants take after their
 parent. Buds are all alike, one colour each.
 -}
 colouringOf : Played -> Int -> Scene.Colouring
@@ -340,7 +370,9 @@ colouringOf played shownGeneration =
             Scene.ByAge (List.map List.length played.run.generations |> List.maximum |> Maybe.withDefault 1)
 
         Life ->
-            Scene.ByIdentity played.seedCellCount (at shownGeneration played.run.identitiesByGeneration)
+            Scene.ByIdentity played.seedCellCount
+                (at shownGeneration played.run.identitiesByGeneration)
+                (at shownGeneration played.run.shapesByGeneration)
 
         Mutation ->
             Scene.ByLineage played.seedCellCount played.run.parentOfCopy
