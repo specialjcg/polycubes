@@ -57,6 +57,7 @@ type alias Model =
     , seedKind : SeedKind
     , mode : Mode
     , run : Run
+    , isPlaying : Bool
     }
 
 
@@ -76,6 +77,7 @@ type Msg
     | SeedKindChosen SeedKind
     | ModeChosen Mode
     | RunRequested
+    | PlaybackToggled
     | RunFinished (Result String AutomatonRun)
     | GenerationInterval
 
@@ -86,6 +88,7 @@ init =
     , seedKind = Uniform
     , mode = Budding
     , run = Running
+    , isPlaying = True
     }
 
 
@@ -153,6 +156,9 @@ update msg model =
         RunRequested ->
             requestRun model
 
+        PlaybackToggled ->
+            ( { model | isPlaying = not model.isPlaying }, Cmd.none )
+
         RunFinished (Ok run) ->
             ( { model
                 | run =
@@ -207,8 +213,8 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Backend.automatonRunFinished RunFinished
-        , case model.run of
-            Ran _ ->
+        , case ( model.run, model.isPlaying ) of
+            ( Ran _, True ) ->
                 Time.every millisecondsBetweenGenerations (\_ -> GenerationInterval)
 
             _ ->
@@ -222,6 +228,15 @@ view model =
         [ div [ Attr.class "controls" ]
             [ CellCountSlider.view largestSeedCellCount CellCountChosen model.cellCount
             , button [ onClick RunRequested ] [ text "Recommencer" ]
+            , button [ onClick PlaybackToggled ]
+                [ text
+                    (if model.isPlaying then
+                        "Pause"
+
+                     else
+                        "Lecture"
+                    )
+                ]
             ]
         , viewChoice "Graine"
             SeedKindChosen
