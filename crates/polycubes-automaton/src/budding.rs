@@ -238,7 +238,7 @@ fn has_room(
 }
 
 /// `cells` shifted so that its cell `anchor` lands on `landing`.
-fn moved_onto(
+pub(crate) fn moved_onto(
     cells: &[Coordinates],
     anchor: Coordinates,
     landing: Coordinates,
