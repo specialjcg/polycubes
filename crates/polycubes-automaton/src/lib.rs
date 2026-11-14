@@ -6,7 +6,7 @@ mod colony;
 mod evolution;
 mod rule;
 
-pub use budding::grow_by_budding;
+pub use budding::{Lineage, grow_by_budding, grow_by_mutating_buds};
 pub use census::{Census, census};
 pub use colony::grow_colony;
 pub use evolution::{Evolution, Fate, Limits, evolve, next_generation};
