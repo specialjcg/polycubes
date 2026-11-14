@@ -87,6 +87,9 @@ colouringAttributes colouring =
             [ copySizeAttribute cellsPerCopy
             , encodedIntsAttribute "copy-ids" identities
             , encodedIntsAttribute "copy-shapes" shapes
+
+            -- Polycubes come and go too fast for cubes to grow into place.
+            , Attr.attribute "instant" ""
             ]
 
         ByAge largestCellCount ->

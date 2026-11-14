@@ -216,14 +216,16 @@ class PolycubeScene extends HTMLElement {
   }
 
   // Hides the cubes beyond the `shown` attribute; a cube that becomes
-  // visible grows from nothing so that the eye catches where it lands.
+  // visible grows from nothing so that the eye catches where it lands,
+  // unless the `instant` attribute is set: when the cells change faster
+  // than a cube grows, half-grown cubes would be all there is to see.
   showFirstCubes() {
     const shownAttribute = this.getAttribute("shown");
     const shownCount = shownAttribute === null ? Infinity : Number(shownAttribute);
     this.cubes.children.forEach((cube) => {
       const placementIndex = cube.userData.placementIndex;
       const isShown = placementIndex === undefined || placementIndex < shownCount;
-      if (isShown && !cube.visible) {
+      if (isShown && !cube.visible && !this.hasAttribute("instant")) {
         cube.userData.appearedAt = performance.now();
         cube.scale.setScalar(SMALLEST_VISIBLE_SCALE);
       }
