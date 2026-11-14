@@ -36,7 +36,7 @@ Coût d'un tirage, 1 thread, sans table de sous-arbres : n = 10 en 4 ms, n = 12 
 
 Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates/polycubes-cli` (binaire), `crates/polycubes-sampling` (tirage), `crates/polycubes-app` (coque Tauri), `frontend/` (Elm + Three.js).
 
-**Application de bureau** (`crates/polycubes-app` + `frontend/`) : Tauri 2, interface Elm, rendu Three.js. Cinq pages :
+**Application de bureau** (`crates/polycubes-app` + `frontend/`) : Tauri 2, interface Elm, rendu Three.js. Six pages :
 
 - **Croissance biaisée contre tirage uniforme** : deux polycubes apparaissent cube par cube côte à côte. À gauche, chaque cube se colle sur une case libre voisine prise au hasard (croissance d'Eden, `grow_by_random_neighbour`), ce qui favorise les formes compactes. À droite, un polycube tiré uniformément, montré dans son ordre d'énumération : seul le polycube final est uniforme, pas ses étapes. Sous chaque vue, la boîte englobante et son taux de remplissage.
 - **Énumération de Redelmeier** (1 à 5 cubes) : l'algorithme polycube par polycube, dans l'ordre où il les visite. Cubes posés, cases en attente (vertes, translucides), cases écartées (cages rouges : déjà essayées plus haut dans l'arbre, interdites en dessous, d'où l'unicité), compteur par taille. Pause, pas à pas, rejouer. La trace vient de `trace_enumeration` (`polycubes-core`), bâtie sur `EnumerationCursor` ; le comptage fermé des 4 derniers cubes n'y figure pas, chaque polycube est visité.
@@ -60,6 +60,7 @@ Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates
   cargo run --release -p polycubes-sampling --example loopless_share -- 11 1000000
   ```
 
+- **Remarquables** (1 à 9 cubes) : les polycubes qui portent le plus de boucles à cette taille, trouvés en visitant tous les polycubes fixes (`most_looped_polycubes`) et regroupés à rotation près. On y voit le carré 2×2 (seul tétracube avec une boucle), le cube 2×2×2 privé d'un coin à 7 cubes, et le cube 2×2×2, seul polycube de 8 cubes à 5 boucles.
 - **Tirage uniforme** : un polycube tiré uniformément, à faire tourner en 3D.
 
 Les deux pages de tirage vont de 1 à 12 cubes.

@@ -7,17 +7,21 @@ port module Backend exposing
     , EnumerationStep
     , GrownPolycube
     , GrowthComparison
+    , MostLoopedPolycubes
+    , RemarkableShape
     , closedFormComparisonFinished
     , drawFinished
     , enumerationTraceFinished
     , galleryFinished
     , growthComparisonFinished
+    , mostLoopedFinished
     , ready
     , requestClosedFormComparison
     , requestDraw
     , requestEnumerationTrace
     , requestGallery
     , requestGrowthComparison
+    , requestMostLooped
     )
 
 {-| Calls to the Rust backend, relayed by `public/backend.js`.
@@ -116,6 +120,22 @@ type alias ExposedFaceHistograms =
     }
 
 
+{-| The shapes of a size that hold the most loops. Each shape stands for
+`orientationCount` fixed polycubes, itself turned around.
+-}
+type alias MostLoopedPolycubes =
+    { loopCount : Int
+    , exposedFaceCount : Int
+    , shapes : List RemarkableShape
+    }
+
+
+type alias RemarkableShape =
+    { polycube : GrownPolycube
+    , orientationCount : Int
+    }
+
+
 {-| Fires once `public/backend.js` listens to the requests. A request sent
 earlier, from `init` for instance, would be lost.
 -}
@@ -177,6 +197,19 @@ port galleryFinishedPort : (Decode.Value -> msg) -> Sub msg
 galleryFinished : (Result String Gallery -> msg) -> Sub msg
 galleryFinished toMsg =
     galleryFinishedPort (decodeResult galleryDecoder >> toMsg)
+
+
+{-| Asks for the polycubes of the given size with the most loops.
+-}
+port requestMostLooped : Int -> Cmd msg
+
+
+port mostLoopedFinishedPort : (Decode.Value -> msg) -> Sub msg
+
+
+mostLoopedFinished : (Result String MostLoopedPolycubes -> msg) -> Sub msg
+mostLoopedFinished toMsg =
+    mostLoopedFinishedPort (decodeResult mostLoopedDecoder >> toMsg)
 
 
 drawFinished : (Result String DrawnPolycube -> msg) -> Sub msg
@@ -274,3 +307,18 @@ exposedFaceHistogramsDecoder =
         (Decode.field "smallestFaceCount" Decode.int)
         (Decode.field "uniform" (Decode.list Decode.int))
         (Decode.field "growth" (Decode.list Decode.int))
+
+
+mostLoopedDecoder : Decoder MostLoopedPolycubes
+mostLoopedDecoder =
+    Decode.map3 MostLoopedPolycubes
+        (Decode.field "loopCount" Decode.int)
+        (Decode.field "exposedFaceCount" Decode.int)
+        (Decode.field "shapes" (Decode.list remarkableShapeDecoder))
+
+
+remarkableShapeDecoder : Decoder RemarkableShape
+remarkableShapeDecoder =
+    Decode.map2 RemarkableShape
+        (Decode.field "polycube" grownPolycubeDecoder)
+        (Decode.field "orientationCount" Decode.int)

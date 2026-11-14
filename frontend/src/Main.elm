@@ -14,6 +14,7 @@ import Page.Draw
 import Page.Enumeration
 import Page.Gallery
 import Page.Growth
+import Page.Remarkable
 
 
 type Page
@@ -21,6 +22,7 @@ type Page
     | EnumerationPage
     | ClosedFormPage
     | GalleryPage
+    | RemarkablePage
     | DrawPage
 
 
@@ -30,6 +32,7 @@ type alias Model =
     , enumeration : Page.Enumeration.Model
     , closedForm : Page.ClosedForm.Model
     , gallery : Page.Gallery.Model
+    , remarkable : Page.Remarkable.Model
     , draw : Page.Draw.Model
     }
 
@@ -41,6 +44,7 @@ type Msg
     | EnumerationMsg Page.Enumeration.Msg
     | ClosedFormMsg Page.ClosedForm.Msg
     | GalleryMsg Page.Gallery.Msg
+    | RemarkableMsg Page.Remarkable.Msg
     | DrawMsg Page.Draw.Msg
 
 
@@ -61,6 +65,7 @@ init =
     , enumeration = Page.Enumeration.init
     , closedForm = Page.ClosedForm.init
     , gallery = Page.Gallery.init
+    , remarkable = Page.Remarkable.init
     , draw = Page.Draw.init
     }
 
@@ -82,6 +87,9 @@ update msg model =
                 ( gallery, galleryCmd ) =
                     Page.Gallery.start model.gallery
 
+                ( remarkable, remarkableCmd ) =
+                    Page.Remarkable.start model.remarkable
+
                 ( draw, drawCmd ) =
                     Page.Draw.start model.draw
             in
@@ -90,6 +98,7 @@ update msg model =
                 , enumeration = enumeration
                 , closedForm = closedForm
                 , gallery = gallery
+                , remarkable = remarkable
                 , draw = draw
               }
             , Cmd.batch
@@ -97,6 +106,7 @@ update msg model =
                 , Cmd.map EnumerationMsg enumerationCmd
                 , Cmd.map ClosedFormMsg closedFormCmd
                 , Cmd.map GalleryMsg galleryCmd
+                , Cmd.map RemarkableMsg remarkableCmd
                 , Cmd.map DrawMsg drawCmd
                 ]
             )
@@ -132,6 +142,13 @@ update msg model =
             in
             ( { model | gallery = gallery }, Cmd.map GalleryMsg galleryCmd )
 
+        RemarkableMsg remarkableMsg ->
+            let
+                ( remarkable, remarkableCmd ) =
+                    Page.Remarkable.update remarkableMsg model.remarkable
+            in
+            ( { model | remarkable = remarkable }, Cmd.map RemarkableMsg remarkableCmd )
+
         DrawMsg drawMsg ->
             let
                 ( draw, drawCmd ) =
@@ -148,6 +165,7 @@ subscriptions model =
         , Sub.map EnumerationMsg (Page.Enumeration.subscriptions model.enumeration)
         , Sub.map ClosedFormMsg (Page.ClosedForm.subscriptions model.closedForm)
         , Sub.map GalleryMsg Page.Gallery.subscriptions
+        , Sub.map RemarkableMsg Page.Remarkable.subscriptions
         , Sub.map DrawMsg Page.Draw.subscriptions
         ]
 
@@ -161,6 +179,7 @@ view model =
             , viewPageButton model.shownPage EnumerationPage "Énumération de Redelmeier"
             , viewPageButton model.shownPage ClosedFormPage "Formule fermée"
             , viewPageButton model.shownPage GalleryPage "Galerie"
+            , viewPageButton model.shownPage RemarkablePage "Remarquables"
             , viewPageButton model.shownPage DrawPage "Tirage uniforme"
             ]
         , case model.shownPage of
@@ -175,6 +194,9 @@ view model =
 
             GalleryPage ->
                 Html.map GalleryMsg (Page.Gallery.view model.gallery)
+
+            RemarkablePage ->
+                Html.map RemarkableMsg (Page.Remarkable.view model.remarkable)
 
             DrawPage ->
                 Html.map DrawMsg (Page.Draw.view model.draw)
