@@ -62,10 +62,12 @@ type alias Model =
 
 {-| `elapsedGenerations` runs past the last generation while it is held.
 `cellsPerCopy` is set when the generations list copies of the seed.
+`cellsInBirthOrder` tells that a cell keeps its rank from one generation to
+the next.
 -}
 type Run
     = Running
-    | Ran { run : AutomatonRun, elapsedGenerations : Int, cellsPerCopy : Maybe Int }
+    | Ran { run : AutomatonRun, elapsedGenerations : Int, cellsPerCopy : Maybe Int, cellsInBirthOrder : Bool }
     | Failed String
 
 
@@ -152,7 +154,15 @@ update msg model =
             requestRun model
 
         RunFinished (Ok run) ->
-            ( { model | run = Ran { run = run, elapsedGenerations = 0, cellsPerCopy = cellsPerCopy model } }
+            ( { model
+                | run =
+                    Ran
+                        { run = run
+                        , elapsedGenerations = 0
+                        , cellsPerCopy = cellsPerCopy model
+                        , cellsInBirthOrder = model.mode == Colony
+                        }
+              }
             , Cmd.none
             )
 
@@ -236,7 +246,20 @@ explain mode =
             "Règle de parité de Fredkin : une case vit si un nombre impair de ses six voisines vivent. Quelle que soit la graine, elle réapparaît en six exemplaires aux générations 1, 2, 4 et 8, de plus en plus écartés."
 
         Colony ->
-            "À chaque génération, chaque cellule qui a une case libre à côté d'elle se divise avec 4 chances sur 10, vers une case libre prise au hasard. Les cellules les plus anciennes sont les plus sombres."
+            "À chaque génération, chaque cellule qui a une case libre à côté d'elle se divise avec 4 chances sur 10, vers une case libre prise au hasard. Les couleurs suivent l'âge : les cellules les plus anciennes sont rouges, les plus jeunes violettes."
+
+
+colouringOf : { played | run : AutomatonRun, cellsPerCopy : Maybe Int, cellsInBirthOrder : Bool } -> Scene.Colouring
+colouringOf played =
+    case ( played.cellsPerCopy, played.cellsInBirthOrder ) of
+        ( Just copySize, _ ) ->
+            Scene.ByCopy copySize
+
+        ( Nothing, True ) ->
+            Scene.ByAge (List.map List.length played.run.generations |> List.maximum |> Maybe.withDefault 1)
+
+        ( Nothing, False ) ->
+            Scene.ByPlacement
 
 
 describePopulation : Maybe Int -> Int -> String
@@ -286,13 +309,7 @@ viewRun run =
             in
             div []
                 [ div [ Attr.class "automaton" ]
-                    [ case played.cellsPerCopy of
-                        Just copySize ->
-                            Scene.viewCopiesFramed frame copySize living
-
-                        Nothing ->
-                            Scene.viewFramed frame living
-                    ]
+                    [ Scene.viewColouredFramed (colouringOf played) frame living ]
                 , p [ Attr.class "status" ]
                     [ text
                         ("Génération "

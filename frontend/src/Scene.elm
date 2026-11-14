@@ -1,4 +1,4 @@
-module Scene exposing (view, viewAmongNeighbours, viewCopiesFramed, viewFirstCells, viewFramed)
+module Scene exposing (Colouring(..), view, viewAmongNeighbours, viewColouredFramed, viewFirstCells)
 
 {-| The 3D view of a polycube, drawn by the `polycube-scene` custom element
 (`public/polycube-scene.js`).
@@ -46,29 +46,41 @@ viewAmongNeighbours neighbours polycube =
         []
 
 
+{-| How the cells of a framed view are coloured. `ByCopy n` : the cells list
+copies of one polycube, `n` cells each, and every copy gets its own colour.
+`ByAge n` : the cells come in birth order, `n` at most, and run through the
+rainbow. `ByPlacement` : shades of one colour, darker for the first cells.
+-}
+type Colouring
+    = ByPlacement
+    | ByCopy Int
+    | ByAge Int
+
+
 {-| Shows cells in a view framed once on the box between two opposite
 corner cells, so that it stays still while the cells spread.
 -}
-viewFramed : { lowestCorner : Cell, highestCorner : Cell } -> List Cell -> Html msg
-viewFramed frame cells =
+viewColouredFramed : Colouring -> { lowestCorner : Cell, highestCorner : Cell } -> List Cell -> Html msg
+viewColouredFramed colouring frame cells =
     Html.node "polycube-scene"
-        [ encodedCellsAttribute "framed" [ frame.lowestCorner, frame.highestCorner ]
-        , cellsAttribute cells
-        ]
+        (encodedCellsAttribute "framed" [ frame.lowestCorner, frame.highestCorner ]
+            :: cellsAttribute cells
+            :: colouringAttributes colouring
+        )
         []
 
 
-{-| Like `viewFramed`, for cells that list copies of one polycube one after
-the other, `cellsPerCopy` cells each: every copy gets its own colour.
--}
-viewCopiesFramed : { lowestCorner : Cell, highestCorner : Cell } -> Int -> List Cell -> Html msg
-viewCopiesFramed frame cellsPerCopy cells =
-    Html.node "polycube-scene"
-        [ encodedCellsAttribute "framed" [ frame.lowestCorner, frame.highestCorner ]
-        , Attr.attribute "copy-size" (String.fromInt cellsPerCopy)
-        , cellsAttribute cells
-        ]
-        []
+colouringAttributes : Colouring -> List (Html.Attribute msg)
+colouringAttributes colouring =
+    case colouring of
+        ByPlacement ->
+            []
+
+        ByCopy cellsPerCopy ->
+            [ Attr.attribute "copy-size" (String.fromInt cellsPerCopy) ]
+
+        ByAge largestCellCount ->
+            [ Attr.attribute "age-span" (String.fromInt largestCellCount) ]
 
 
 cellsAttribute : Polycube -> Html.Attribute msg

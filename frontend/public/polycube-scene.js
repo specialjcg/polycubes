@@ -8,7 +8,9 @@
 // still while the polycube changes. `framed="[[x,y,z],[x,y,z]]"` frames the
 // box between two opposite corner cells instead, for cells that spread far.
 // `copy-size="n"` tells that the cells list copies of one polycube, n cells
-// each: every copy then gets its own colour.
+// each: every copy then gets its own colour. `age-span="n"` tells that the
+// cells come in birth order, n at most: they run through the rainbow, the
+// eldest red, the youngest violet.
 // The Elm application owns the state; this element only draws what its
 // attributes describe.
 import * as THREE from "three";
@@ -29,6 +31,9 @@ const ADDED_COLOUR = 0x3b6fb5;
 const COPY_HUE_STEP = 0.381966;
 const COPY_SATURATION = 0.55;
 const COPY_LIGHTNESS = 0.58;
+// The rainbow stops at violet: going round to red again would give the
+// youngest cells the colour of the eldest.
+const YOUNGEST_HUE = 0.78;
 // Share of the room of all polycubes that the camera frames: most polycubes
 // stay near the first cell, so framing the whole room would shrink them;
 // only the straightest ones graze the border.
@@ -52,6 +57,7 @@ class PolycubeScene extends HTMLElement {
     "extent",
     "framed",
     "copy-size",
+    "age-span",
   ];
 
   connectedCallback() {
@@ -139,14 +145,22 @@ class PolycubeScene extends HTMLElement {
     const extent = Number(this.getAttribute("extent") ?? placedCells.length);
     const lastPlacementIndex = Math.max(extent - 1, 1);
     const copySize = Number(this.getAttribute("copy-size") ?? 0);
+    const ageSpan = Number(this.getAttribute("age-span") ?? 0);
+    const colourOf = (placementIndex) => {
+      if (copySize > 0) {
+        return colourOfCopy(Math.floor(placementIndex / copySize));
+      }
+      if (ageSpan > 0) {
+        return colourOfAge(placementIndex / ageSpan);
+      }
+      return colourOfPlacement(placementIndex / lastPlacementIndex);
+    };
     const builderByKey = new Map();
     placedCells.forEach((cell, placementIndex) => {
-      const colour =
-        copySize > 0
-          ? colourOfCopy(Math.floor(placementIndex / copySize))
-          : colourOfPlacement(placementIndex / lastPlacementIndex);
-      builderByKey.set(`placed ${placementIndex} ${cell} ${colour.getHex()}`, () =>
-        buildPlacedCube(cell, placementIndex, colour),
+      // The key names the colouring, not the colour: the brown shades drift
+      // as cells are added, and must not redraw the cubes already there.
+      builderByKey.set(`placed ${placementIndex} ${cell} ${copySize} ${ageSpan}`, () =>
+        buildPlacedCube(cell, placementIndex, colourOf(placementIndex)),
       );
     });
     for (const cell of this.cellsOf("candidates")) {
@@ -269,6 +283,11 @@ function colourOfPlacement(placementProgress) {
     new THREE.Color(LAST_CELL_COLOUR),
     placementProgress,
   );
+}
+
+// `age` runs from 0 (eldest cell) to 1 (youngest one there will be).
+function colourOfAge(age) {
+  return new THREE.Color().setHSL(age * YOUNGEST_HUE, COPY_SATURATION, COPY_LIGHTNESS);
 }
 
 function colourOfCopy(copyIndex) {
