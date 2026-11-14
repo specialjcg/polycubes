@@ -19,6 +19,7 @@ use drawing::{CellCount, DrawnPolycube, PolycubeDrawer};
 use enumeration::TracedStep;
 use gallery::Gallery;
 use growth::GrowthComparison;
+use polycubes_core::Coordinates;
 use remarkable::RemarkablePolycubes;
 
 /// Draws a fixed polycube of `cell_count` cells uniformly at random.
@@ -100,16 +101,13 @@ fn find_remarkable(cell_count: usize) -> Result<RemarkablePolycubes, String> {
     remarkable::find_remarkable(cell_count).map_err(|error| error.to_string())
 }
 
-/// Picks a seed of `cell_count` cells and makes it grow.
-#[tauri::command(async)]
-fn run_automaton(
+/// Picks a polycube of `cell_count` cells the way `seed_kind` says.
+fn pick_seed(
     cell_count: usize,
     seed_kind: SeedKind,
-    mode: GrowthMode,
-    drawer: tauri::State<'_, Mutex<PolycubeDrawer>>,
-) -> Result<AutomatonRun, String> {
-    automaton::check_seed_cell_count(cell_count).map_err(|error| error.to_string())?;
-    let seed = match seed_kind {
+    drawer: &Mutex<PolycubeDrawer>,
+) -> Result<Vec<Coordinates>, String> {
+    Ok(match seed_kind {
         SeedKind::Uniform => {
             let cell_count = CellCount::try_from(cell_count).map_err(|error| error.to_string())?;
             let mut drawer = drawer
@@ -133,7 +131,19 @@ fn run_automaton(
             .next()
             .map(|shape| shape.cells)
             .ok_or_else(|| "no polycube of that size".to_owned())?,
-    };
+    })
+}
+
+/// Picks a seed of `cell_count` cells and makes it grow.
+#[tauri::command(async)]
+fn run_automaton(
+    cell_count: usize,
+    seed_kind: SeedKind,
+    mode: GrowthMode,
+    drawer: tauri::State<'_, Mutex<PolycubeDrawer>>,
+) -> Result<AutomatonRun, String> {
+    automaton::check_seed_cell_count(cell_count).map_err(|error| error.to_string())?;
+    let seed = pick_seed(cell_count, seed_kind, &drawer)?;
     Ok(match mode {
         GrowthMode::Replicator => automaton::replicate(&seed),
         GrowthMode::EdgeReplicator => automaton::replicate_over_edges(&seed),
