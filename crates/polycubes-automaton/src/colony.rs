@@ -44,7 +44,7 @@ pub fn grow_colony(
     generations
 }
 
-fn face_neighbours([x, y, z]: Coordinates) -> [Coordinates; 6] {
+pub(crate) fn face_neighbours([x, y, z]: Coordinates) -> [Coordinates; 6] {
     [
         [x + 1, y, z],
         [x - 1, y, z],
