@@ -143,8 +143,17 @@ fn run_automaton(
     drawer: tauri::State<'_, Mutex<PolycubeDrawer>>,
 ) -> Result<AutomatonRun, String> {
     automaton::check_seed_cell_count(cell_count).map_err(|error| error.to_string())?;
+    if mode == GrowthMode::Life {
+        let polycubes = (0..automaton::soup_polycube_count(cell_count))
+            .map(|_| pick_seed(cell_count, seed_kind, &drawer))
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(automaton::live(&polycubes, |shift_count| {
+            rand::random_range(0..shift_count)
+        }));
+    }
     let seed = pick_seed(cell_count, seed_kind, &drawer)?;
     Ok(match mode {
+        GrowthMode::Life => automaton::live(&[seed], |_| 0),
         GrowthMode::Replicator => automaton::replicate(&seed),
         GrowthMode::EdgeReplicator => automaton::replicate_over_edges(&seed),
         GrowthMode::Colony => automaton::grow(

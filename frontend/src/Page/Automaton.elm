@@ -1,6 +1,6 @@
 module Page.Automaton exposing (Model, Msg, init, start, subscriptions, update, view)
 
-{-| A polycube that grows generation after generation, in one of five ways.
+{-| A polycube that grows generation after generation, in one of six ways.
 By mutation, it bears buds that are itself with one cell moved.
 By budding, it bears turned copies of itself against it, which bud in turn.
 As a replicator, under Fredkin's parity rule, it comes back as six copies of
@@ -50,6 +50,7 @@ type SeedKind
 type Mode
     = Mutation
     | Budding
+    | Life
     | Replicator
     | EdgeReplicator
     | Colony
@@ -136,6 +137,9 @@ modeName mode =
         Budding ->
             "budding"
 
+        Life ->
+            "life"
+
         Replicator ->
             "replicator"
 
@@ -200,6 +204,9 @@ colouringOf mode seedCellCount run =
         Colony ->
             Scene.ByAge (List.map List.length run.generations |> List.maximum |> Maybe.withDefault 1)
 
+        Life ->
+            Scene.ByDistance
+
         Replicator ->
             Scene.ByDistance
 
@@ -261,7 +268,7 @@ view model =
         , viewChoice "Croissance"
             ModeChosen
             model.mode
-            [ ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ), ( Replicator, "Réplicateur à 6" ), ( EdgeReplicator, "Réplicateur à 12" ), ( Colony, "Colonie" ) ]
+            [ ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ), ( Life, "Vie" ), ( Replicator, "Réplicateur à 6" ), ( EdgeReplicator, "Réplicateur à 12" ), ( Colony, "Colonie" ) ]
         , p [ Attr.class "explanation" ] [ text (explain model.mode) ]
         , viewRun model.run
         ]
@@ -275,6 +282,9 @@ explain mode =
 
         Budding ->
             "À chaque génération, un polycube sur deux tente de bourgeonner : une copie de lui-même, tournée au hasard mais jamais en miroir, naît contre lui là où la place est libre. Chaque copie a sa couleur et bourgeonne à son tour."
+
+        Life ->
+            "Règle de la famille du jeu de la vie, sur les 26 voisines : une cellule survit avec 3 à 6 voisines vivantes, une case vide naît avec exactement 5. Aucun hasard dans la règle ; le départ est une soupe d'une vingtaine de cubes, faite de plusieurs polycubes jetés ensemble. Les couleurs suivent la distance au centre."
 
         Replicator ->
             "Règle de parité de Fredkin : une case vit si un nombre impair de ses six voisines vivent. Quelle que soit la graine, elle réapparaît en six exemplaires aux générations 1, 2, 4 et 8, de plus en plus écartés. Les couleurs suivent la distance au centre."

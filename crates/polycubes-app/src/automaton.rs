@@ -24,6 +24,19 @@ const EDGE_REPLICATOR_LIMITS: Limits = Limits {
     population: 3000,
 };
 
+/// Cells a soup aims at: a lone small polycube dies at once under the life
+/// rule, some twenty cells thrown together live on.
+const SOUP_CELL_COUNT: usize = 24;
+
+/// Side of the cube the polycubes of a soup are shifted within: close
+/// enough for them to meet.
+const SOUP_SIDE: usize = 3;
+
+const LIFE_LIMITS: Limits = Limits {
+    generation_count: 32,
+    population: 2000,
+};
+
 const COLONY_GENERATION_COUNT: usize = 24;
 
 /// Cells drawn at most: beyond, the 3D view slows down.
@@ -70,6 +83,9 @@ pub enum GrowthMode {
     Colony,
     /// Whole polycubes bud turned copies of themselves against them.
     Budding,
+    /// A rule of the family of Conway's game of life, over the 26
+    /// neighbours, started from several polycubes thrown together.
+    Life,
     /// Like budding, but each bud is its parent with one cell moved.
     Mutation,
 }
@@ -192,6 +208,48 @@ pub fn bud_mutants(
     }
 }
 
+/// Polycubes of `cell_count` cells a soup takes to hold about
+/// [`SOUP_CELL_COUNT`] cells.
+#[must_use]
+pub fn soup_polycube_count(cell_count: usize) -> usize {
+    SOUP_CELL_COUNT.div_ceil(cell_count.max(1))
+}
+
+/// Throws `polycubes` together and runs a rule of the family of Conway's
+/// game of life: a cell with 3 to 6 living cells among its 26 neighbours
+/// lives on, a free cell with exactly 5 is born. `choose_shift` gives how
+/// far each polycube is moved along each axis, among [`SOUP_SIDE`] steps,
+/// and must answer an index below that number.
+///
+/// Measured on soups of four to eight hexacubes: this rule kept all of
+/// them alive and growing slowly, where the two rules known for their
+/// gliders (survival 4-5 birth 5, survival 5-7 birth 6) died out.
+#[must_use]
+pub fn live(
+    polycubes: &[Vec<Coordinates>],
+    mut choose_shift: impl FnMut(usize) -> usize,
+) -> AutomatonRun {
+    let mut soup = Vec::new();
+    for polycube in polycubes {
+        let shift = [0, 1, 2].map(|_| step_count(choose_shift(SOUP_SIDE)));
+        soup.extend(
+            polycube
+                .iter()
+                .map(|cell| [0, 1, 2].map(|axis| cell[axis] + shift[axis])),
+        );
+    }
+    soup.sort_unstable();
+    soup.dedup();
+    let life_rule = Rule::new(Neighbourhood::FacesEdgesCorners, &[3, 4, 5, 6], &[5])
+        .expect("counts below 26 fit the wide neighbourhood");
+    AutomatonRun::of(evolve(&soup, &life_rule, LIFE_LIMITS).generations)
+}
+
+/// A shift below [`SOUP_SIDE`] always fits a coordinate.
+fn step_count(shift: usize) -> i32 {
+    i32::try_from(shift).unwrap_or(0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -252,6 +310,29 @@ mod tests {
         let last_copy_count = run.generations.last().map_or(0, Vec::len) / SEED.len();
         assert_eq!(last_copy_count, MUTATION_POLYCUBE_LIMIT);
         assert_eq!(run.parent_of_copy.len(), last_copy_count);
+    }
+
+    #[test]
+    fn life_starts_from_every_polycube_shifted_into_one_soup() {
+        let mut shifts = [0, 0, 0, 2, 1, 0].into_iter();
+        let run = live(&[SEED.to_vec(), SEED.to_vec()], |_| {
+            shifts.next().expect("three shifts per polycube")
+        });
+
+        let mut soup: Vec<Coordinates> = SEED
+            .iter()
+            .flat_map(|&[x, y, z]| [[x, y, z], [x + 2, y + 1, z]])
+            .collect();
+        soup.sort_unstable();
+        soup.dedup();
+        assert_eq!(run.generations[0], soup);
+    }
+
+    #[test]
+    fn a_soup_holds_about_as_many_cells_whatever_the_polycubes() {
+        assert_eq!(soup_polycube_count(1), 24);
+        assert_eq!(soup_polycube_count(5), 5);
+        assert_eq!(soup_polycube_count(6), 4);
     }
 
     #[test]
