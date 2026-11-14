@@ -62,13 +62,10 @@ type alias Model =
 
 
 {-| `elapsedGenerations` runs past the last generation while it is held.
-`cellsPerCopy` is set when the generations list copies of the seed.
-`cellsInBirthOrder` tells that a cell keeps its rank from one generation to
-the next.
 -}
 type Run
     = Running
-    | Ran { run : AutomatonRun, elapsedGenerations : Int, cellsPerCopy : Maybe Int, cellsInBirthOrder : Bool }
+    | Ran { run : AutomatonRun, elapsedGenerations : Int, colouring : Scene.Colouring }
     | Failed String
 
 
@@ -165,8 +162,7 @@ update msg model =
                     Ran
                         { run = run
                         , elapsedGenerations = 0
-                        , cellsPerCopy = cellsPerCopy model
-                        , cellsInBirthOrder = model.mode == Colony
+                        , colouring = colouringOf model.mode model.cellCount run
                         }
               }
             , Cmd.none
@@ -179,16 +175,21 @@ update msg model =
             ( { model | run = letAGenerationPass model.run }, Cmd.none )
 
 
-{-| Only budding keeps the seed whole: its generations list copies of it.
+{-| Budding keeps the seed whole, one colour per copy. A colony lists its
+cells in birth order, so they are coloured by age. The replicator has
+neither, its cells are coloured by where they stand.
 -}
-cellsPerCopy : Model -> Maybe Int
-cellsPerCopy model =
-    case model.mode of
+colouringOf : Mode -> Int -> AutomatonRun -> Scene.Colouring
+colouringOf mode seedCellCount run =
+    case mode of
         Budding ->
-            Just model.cellCount
+            Scene.ByCopy seedCellCount
 
-        _ ->
-            Nothing
+        Colony ->
+            Scene.ByAge (List.map List.length run.generations |> List.maximum |> Maybe.withDefault 1)
+
+        Replicator ->
+            Scene.ByDistance
 
 
 {-| The run plays in a loop: after the last generation has been held, the
@@ -258,32 +259,19 @@ explain mode =
             "À chaque génération, un polycube sur deux tente de bourgeonner : une copie de lui-même, tournée au hasard mais jamais en miroir, naît contre lui là où la place est libre. Chaque copie a sa couleur et bourgeonne à son tour."
 
         Replicator ->
-            "Règle de parité de Fredkin : une case vit si un nombre impair de ses six voisines vivent. Quelle que soit la graine, elle réapparaît en six exemplaires aux générations 1, 2, 4 et 8, de plus en plus écartés."
+            "Règle de parité de Fredkin : une case vit si un nombre impair de ses six voisines vivent. Quelle que soit la graine, elle réapparaît en six exemplaires aux générations 1, 2, 4 et 8, de plus en plus écartés. Les couleurs suivent la distance au centre."
 
         Colony ->
-            "À chaque génération, chaque cellule qui a une case libre à côté d'elle se divise avec 4 chances sur 10, vers une case libre prise au hasard. Les couleurs suivent l'âge : les cellules les plus anciennes sont rouges, les plus jeunes violettes."
+            "À chaque génération, chaque cellule se divise avec 4 chances sur 10, vers une case libre voisine qui ne touche aucune autre cellule : la colonie pousse en branches, sans jamais se refermer en boucle. Les couleurs suivent l'âge : les cellules les plus anciennes sont rouges, les plus jeunes violettes."
 
 
-colouringOf : { played | run : AutomatonRun, cellsPerCopy : Maybe Int, cellsInBirthOrder : Bool } -> Scene.Colouring
-colouringOf played =
-    case ( played.cellsPerCopy, played.cellsInBirthOrder ) of
-        ( Just copySize, _ ) ->
-            Scene.ByCopy copySize
+describePopulation : Scene.Colouring -> Int -> String
+describePopulation colouring cellCount =
+    case colouring of
+        Scene.ByCopy cellsPerCopy ->
+            String.fromInt (cellCount // cellsPerCopy) ++ " polycubes, " ++ String.fromInt cellCount ++ " cellules"
 
-        ( Nothing, True ) ->
-            Scene.ByAge (List.map List.length played.run.generations |> List.maximum |> Maybe.withDefault 1)
-
-        ( Nothing, False ) ->
-            Scene.ByPlacement
-
-
-describePopulation : Maybe Int -> Int -> String
-describePopulation copySize cellCount =
-    case copySize of
-        Just size ->
-            String.fromInt (cellCount // size) ++ " polycubes, " ++ String.fromInt cellCount ++ " cellules"
-
-        Nothing ->
+        _ ->
             String.fromInt cellCount ++ " cellules"
 
 
@@ -324,7 +312,7 @@ viewRun run =
             in
             div []
                 [ div [ Attr.class "automaton" ]
-                    [ Scene.viewColouredFramed (colouringOf played) frame living ]
+                    [ Scene.viewColouredFramed played.colouring frame living ]
                 , p [ Attr.class "status" ]
                     [ text
                         ("Génération "
@@ -332,7 +320,7 @@ viewRun run =
                             ++ " sur "
                             ++ String.fromInt lastGeneration
                             ++ " : "
-                            ++ describePopulation played.cellsPerCopy (List.length living)
+                            ++ describePopulation played.colouring (List.length living)
                         )
                     ]
                 ]

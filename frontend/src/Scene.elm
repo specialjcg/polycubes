@@ -49,12 +49,14 @@ viewAmongNeighbours neighbours polycube =
 {-| How the cells of a framed view are coloured. `ByCopy n` : the cells list
 copies of one polycube, `n` cells each, and every copy gets its own colour.
 `ByAge n` : the cells come in birth order, `n` at most, and run through the
-rainbow. `ByPlacement` : shades of one colour, darker for the first cells.
+rainbow. `ByDistance` : the rainbow again, from the centre of the frame
+outwards. `ByPlacement` : shades of one colour, darker for the first cells.
 -}
 type Colouring
     = ByPlacement
     | ByCopy Int
     | ByAge Int
+    | ByDistance
 
 
 {-| Shows cells in a view framed once on the box between two opposite
@@ -81,6 +83,9 @@ colouringAttributes colouring =
 
         ByAge largestCellCount ->
             [ Attr.attribute "age-span" (String.fromInt largestCellCount) ]
+
+        ByDistance ->
+            [ Attr.attribute "distance-coloured" "" ]
 
 
 cellsAttribute : Polycube -> Html.Attribute msg
