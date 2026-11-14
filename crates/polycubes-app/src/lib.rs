@@ -154,6 +154,9 @@ fn run_automaton(
     let seed = pick_seed(cell_count, seed_kind, &drawer)?;
     Ok(match mode {
         GrowthMode::Life => automaton::live(&[seed], |_| 0),
+        GrowthMode::Aggregation => automaton::aggregate_wanderers(&seed, |choice_count| {
+            rand::random_range(0..choice_count)
+        }),
         GrowthMode::Replicator => automaton::replicate(&seed),
         GrowthMode::EdgeReplicator => automaton::replicate_over_edges(&seed),
         GrowthMode::Colony => automaton::grow(

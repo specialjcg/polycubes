@@ -1,7 +1,8 @@
 //! Polycubes that grow generation after generation, for the frontend.
 
 use polycubes_automaton::{
-    Limits, Neighbourhood, Rule, evolve, grow_by_budding, grow_by_mutating_buds, grow_colony,
+    Limits, Neighbourhood, Rule, aggregate, evolve, grow_by_budding, grow_by_mutating_buds,
+    grow_colony,
 };
 use polycubes_core::Coordinates;
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,12 @@ const LIFE_LIMITS: Limits = Limits {
     generation_count: 32,
     population: 2000,
 };
+
+/// Cells an aggregate aims at, whatever the size of its polycubes.
+const AGGREGATE_CELL_COUNT: usize = 600;
+
+/// Generations the arrivals of an aggregate are spread over.
+const AGGREGATE_GENERATION_COUNT: usize = 24;
 
 const COLONY_GENERATION_COUNT: usize = 24;
 
@@ -83,6 +90,8 @@ pub enum GrowthMode {
     Colony,
     /// Whole polycubes bud turned copies of themselves against them.
     Budding,
+    /// Polycubes wander in from afar and stick where they first touch.
+    Aggregation,
     /// A rule of the family of Conway's game of life, over the 26
     /// neighbours, started from several polycubes thrown together.
     Life,
@@ -206,6 +215,27 @@ pub fn bud_mutants(
         parent_of_copy: lineage.parent_of_copy,
         ..AutomatonRun::of(lineage.generations)
     }
+}
+
+/// Grows an aggregate from `seed`: copies of it, turned at random, wander
+/// in and stick where they first touch. `choose` stands for every random
+/// choice. A generation lists the polycubes stuck so far, in the order
+/// they came.
+#[must_use]
+pub fn aggregate_wanderers(
+    seed: &[Coordinates],
+    choose: impl FnMut(usize) -> usize,
+) -> AutomatonRun {
+    let polycube_count = AGGREGATE_CELL_COUNT / seed.len().max(1);
+    let polycubes = aggregate(seed, polycube_count, choose);
+    let arrivals_per_generation = polycube_count.div_ceil(AGGREGATE_GENERATION_COUNT).max(1);
+    let generations = (0..=AGGREGATE_GENERATION_COUNT)
+        .map(|generation| {
+            let stuck_count = (1 + generation * arrivals_per_generation).min(polycubes.len());
+            polycubes[..stuck_count].concat()
+        })
+        .collect();
+    AutomatonRun::of(generations)
 }
 
 /// Polycubes of `cell_count` cells a soup takes to hold about
@@ -333,6 +363,28 @@ mod tests {
         assert_eq!(soup_polycube_count(1), 24);
         assert_eq!(soup_polycube_count(5), 5);
         assert_eq!(soup_polycube_count(6), 4);
+    }
+
+    #[test]
+    fn an_aggregate_gains_whole_polycubes_generation_after_generation() {
+        let mut state: u64 = 0x2545_f491_4f6c_dd1d;
+        let run = aggregate_wanderers(&SEED, |choice_count| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            usize::try_from(state >> 33).expect("31 bits fit") % choice_count
+        });
+
+        assert_eq!(run.generations.len(), AGGREGATE_GENERATION_COUNT + 1);
+        assert_eq!(run.generations[0], SEED);
+        let populations: Vec<usize> = run.generations.iter().map(Vec::len).collect();
+        assert!(populations.is_sorted(), "{populations:?}");
+        assert!(
+            populations
+                .iter()
+                .all(|population| population % SEED.len() == 0)
+        );
+        assert_eq!(populations.last(), Some(&AGGREGATE_CELL_COUNT));
     }
 
     #[test]

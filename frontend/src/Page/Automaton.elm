@@ -1,6 +1,7 @@
 module Page.Automaton exposing (Model, Msg, init, start, subscriptions, update, view)
 
-{-| A polycube that grows generation after generation, in one of six ways.
+{-| A polycube that grows generation after generation, in one of seven ways.
+By aggregation, copies of it wander in from afar and stick where they touch.
 By mutation, it bears buds that are itself with one cell moved.
 By budding, it bears turned copies of itself against it, which bud in turn.
 As a replicator, under Fredkin's parity rule, it comes back as six copies of
@@ -48,7 +49,8 @@ type SeedKind
 
 
 type Mode
-    = Mutation
+    = Aggregation
+    | Mutation
     | Budding
     | Life
     | Replicator
@@ -87,7 +89,7 @@ init : Model
 init =
     { cellCount = initialCellCount
     , seedKind = Uniform
-    , mode = Mutation
+    , mode = Aggregation
     , run = Running
     , isPlaying = True
     }
@@ -131,6 +133,9 @@ seedKindName seedKind =
 modeName : Mode -> String
 modeName mode =
     case mode of
+        Aggregation ->
+            "aggregation"
+
         Mutation ->
             "mutation"
 
@@ -201,6 +206,9 @@ colouringOf mode seedCellCount run =
         Budding ->
             Scene.ByCopy seedCellCount
 
+        Aggregation ->
+            Scene.ByAge (List.map List.length run.generations |> List.maximum |> Maybe.withDefault 1)
+
         Colony ->
             Scene.ByAge (List.map List.length run.generations |> List.maximum |> Maybe.withDefault 1)
 
@@ -268,7 +276,7 @@ view model =
         , viewChoice "Croissance"
             ModeChosen
             model.mode
-            [ ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ), ( Life, "Vie" ), ( Replicator, "Réplicateur à 6" ), ( EdgeReplicator, "Réplicateur à 12" ), ( Colony, "Colonie" ) ]
+            [ ( Aggregation, "Agrégation" ), ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ), ( Life, "Vie" ), ( Replicator, "Réplicateur à 6" ), ( EdgeReplicator, "Réplicateur à 12" ), ( Colony, "Colonie" ) ]
         , p [ Attr.class "explanation" ] [ text (explain model.mode) ]
         , viewRun model.run
         ]
@@ -277,6 +285,9 @@ view model =
 explain : Mode -> String
 explain mode =
     case mode of
+        Aggregation ->
+            "Comme le givre ou le corail : des copies du polycube, tournées au hasard, arrivent de loin en errant case par case et se collent là où elles touchent l'amas pour la première fois. Les pointes attrapent les arrivants avant les creux, d'où les branches. Les couleurs suivent l'ordre d'arrivée : rouge pour les premiers, violet pour les derniers."
+
         Mutation ->
             "À chaque génération, un polycube sur deux tente de bourgeonner : l'enfant est le parent avec un cube déplacé, tourné au hasard, et naît contre lui sans toucher aucun autre. Les formes dérivent le long des branches ; chaque enfant prend une couleur proche de celle de son parent."
 
