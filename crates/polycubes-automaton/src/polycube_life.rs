@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use polycubes_core::Coordinates;
 
-use crate::budding::{moved_onto, orientations};
+use crate::budding::{moved_onto, one_cell_moved, orientations};
 use crate::colony::face_neighbours;
 
 /// Neighbours of a polycube are the other polycubes it shares a face with.
@@ -18,6 +18,9 @@ pub struct PolycubeLifeRule {
     /// neighbours, and at most the next field.
     pub fewest_neighbours_to_be_born: usize,
     pub most_neighbours_to_be_born: usize,
+    /// One child in that many is its parent with one cell moved; the others
+    /// have the very shape of their parent. Zero: no child ever mutates.
+    pub mutation_one_in: usize,
 }
 
 /// How long the game is played, and where: no cell stands farther than
@@ -43,11 +46,13 @@ pub struct LivingPolycube {
 ///
 /// All polycubes change at once, from the generation before. One with more
 /// neighbours than the rule allows dies. Each one, dying or not, bears a
-/// child when `buds` says so: the seed turned any way, never mirrored,
+/// child when `buds` says so: its own shape, or now and then that shape
+/// with one cell moved as the rule says, turned any way, never mirrored,
 /// against its parent, over no cell taken before or during the generation,
 /// and with a number of neighbours among the generation before that the
-/// rule allows, within the world. `choose` picks the child among the number
-/// of such places, and must answer an index below that number.
+/// rule allows, within the world. `choose` picks whether the child mutates,
+/// which cell moves and where the child is born, each among a number of
+/// choices, and must answer an index below that number.
 #[must_use]
 pub fn live_as_polycubes(
     seed: &[Coordinates],
@@ -64,7 +69,6 @@ pub fn live_as_polycubes(
     if seed.is_empty() {
         return generations;
     }
-    let orientations = orientations(seed);
     let mut next_identity = 1;
     for _ in 0..world.generation_count {
         let before = Generation::of(&living);
@@ -79,8 +83,18 @@ pub fn live_as_polycubes(
             if !buds() {
                 continue;
             }
-            let mut birthplaces =
-                before.birthplaces(&parent.cells, &orientations, &taken, (rule, world));
+            let mutates = rule.mutation_one_in > 0 && choose(rule.mutation_one_in) == 0;
+            let child_shape = if mutates {
+                one_cell_moved(&parent.cells, &mut choose)
+            } else {
+                parent.cells.clone()
+            };
+            let mut birthplaces = before.birthplaces(
+                &parent.cells,
+                &orientations(&child_shape),
+                &taken,
+                (rule, world),
+            );
             if birthplaces.is_empty() {
                 continue;
             }

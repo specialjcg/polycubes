@@ -18,7 +18,7 @@ pub struct Lineage {
 }
 
 /// Picks one among a number of choices: must answer an index below it.
-type Choice<'choice> = &'choice mut dyn FnMut(usize) -> usize;
+pub(crate) type Choice<'choice> = &'choice mut dyn FnMut(usize) -> usize;
 
 /// Grows a colony of copies of `seed` for `generation_count` generations
 /// and returns them all, the seed first. A generation lists its copies in
@@ -123,7 +123,7 @@ fn same_shape(parent: &[Coordinates], _choose: Choice) -> Vec<Coordinates> {
 
 /// `parent` with one cell taken off and put back elsewhere against the
 /// others, still in one piece; `parent` itself when no cell can move.
-fn one_cell_moved(parent: &[Coordinates], choose: Choice) -> Vec<Coordinates> {
+pub(crate) fn one_cell_moved(parent: &[Coordinates], choose: Choice) -> Vec<Coordinates> {
     let mut mutants = BTreeSet::new();
     for moved_index in 0..parent.len() {
         let mut kept = parent.to_vec();
@@ -247,4 +247,25 @@ pub(crate) fn moved_onto(
         .iter()
         .map(|cell| [0, 1, 2].map(|axis| cell[axis] - anchor[axis] + landing[axis]))
         .collect()
+}
+
+/// What a polycube looks like whichever way it is turned and wherever it
+/// stands: two polycubes have the same canonical shape when turning and
+/// moving one gives the other. A mirror image is another shape.
+#[must_use]
+pub fn canonical_shape(cells: &[Coordinates]) -> Vec<Coordinates> {
+    orientations(cells)
+        .into_iter()
+        .map(|orientation| {
+            let lowest_corner =
+                [0, 1, 2].map(|axis| orientation.iter().map(|cell| cell[axis]).min().unwrap_or(0));
+            let mut against_origin: Vec<Coordinates> = orientation
+                .iter()
+                .map(|cell| [0, 1, 2].map(|axis| cell[axis] - lowest_corner[axis]))
+                .collect();
+            against_origin.sort_unstable();
+            against_origin
+        })
+        .min()
+        .unwrap_or_default()
 }

@@ -1,6 +1,8 @@
 use std::collections::HashSet;
 
-use polycubes_automaton::{LivingPolycube, PolycubeLifeRule, PolycubeWorld, live_as_polycubes};
+use polycubes_automaton::{
+    LivingPolycube, PolycubeLifeRule, PolycubeWorld, canonical_shape, live_as_polycubes,
+};
 use polycubes_core::Coordinates;
 
 /// A tetracube that differs from its mirror image.
@@ -10,6 +12,7 @@ const RULE: PolycubeLifeRule = PolycubeLifeRule {
     most_neighbours_to_survive: 2,
     fewest_neighbours_to_be_born: 1,
     most_neighbours_to_be_born: 2,
+    mutation_one_in: 0,
 };
 
 const WORLD: PolycubeWorld = PolycubeWorld {
@@ -165,4 +168,58 @@ fn no_identity_is_given_twice() {
             .or_insert(&polycube.cells);
         assert_eq!(*known_cells, &polycube.cells);
     }
+}
+
+fn is_in_one_piece(cells: &[Coordinates]) -> bool {
+    let mut reached = vec![cells[0]];
+    let mut explored_count = 0;
+    while explored_count < reached.len() {
+        for &cell in cells {
+            if !reached.contains(&cell) && touch(cell, reached[explored_count]) {
+                reached.push(cell);
+            }
+        }
+        explored_count += 1;
+    }
+    reached.len() == cells.len()
+}
+
+#[test]
+fn children_that_mutate_stay_whole_polycubes_but_shapes_spread() {
+    let mutating_rule = PolycubeLifeRule {
+        mutation_one_in: 2,
+        ..RULE
+    };
+    let generations = live_as_polycubes(&SCREW, mutating_rule, WORLD, || true, varied_choice());
+
+    let mut shapes = HashSet::new();
+    for polycube in generations.iter().flatten() {
+        assert_eq!(polycube.cells.len(), SCREW.len());
+        assert!(is_in_one_piece(&polycube.cells), "{:?}", polycube.cells);
+        shapes.insert(canonical_shape(&polycube.cells));
+    }
+    assert!(shapes.len() > 2, "only {} shapes", shapes.len());
+}
+
+#[test]
+fn without_mutation_every_polycube_has_the_shape_of_the_seed() {
+    let shapes: HashSet<Vec<Coordinates>> = played()
+        .iter()
+        .flatten()
+        .map(|polycube| canonical_shape(&polycube.cells))
+        .collect();
+
+    assert_eq!(shapes.len(), 1);
+}
+
+#[test]
+fn a_shape_is_the_same_turned_or_moved_but_not_mirrored() {
+    let turned_and_moved: Vec<Coordinates> = SCREW
+        .iter()
+        .map(|&[x, y, z]| [7 - y, x + 2, z - 4])
+        .collect();
+    let mirrored: Vec<Coordinates> = SCREW.iter().map(|&[x, y, z]| [-x, y, z]).collect();
+
+    assert_eq!(canonical_shape(&turned_and_moved), canonical_shape(&SCREW));
+    assert_ne!(canonical_shape(&mirrored), canonical_shape(&SCREW));
 }
