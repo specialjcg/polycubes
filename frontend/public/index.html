@@ -34,9 +34,11 @@
     .gallery polycube-scene { height: 190px; }
     .gallery .status { margin: 4px 0 0; font-size: 0.85rem; }
     .histograms { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 12px; }
-    .histogram { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 120px; border-bottom: 1px solid #8a7a66; }
+    .histogram { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; align-items: end; height: 120px; border-bottom: 1px solid #8a7a66; }
     .histogram .bar { background: #b5651d; min-height: 0; }
     .histogram.growth .bar { background: #2f8f6b; }
+    .histograms h2 { margin-top: 8px; }
+    .histograms .status { margin: 4px 0 0; font-size: 0.85rem; }
     .histogram-axis { display: flex; justify-content: space-between; font-size: 0.85rem; color: #5c4f40; }
     .closed-form { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
     .closed-form polycube-scene { height: 440px; }

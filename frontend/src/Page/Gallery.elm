@@ -6,7 +6,7 @@ polycubes grown by random neighbour. Some of the uniform draws are shown,
 from the most compact to the least.
 -}
 
-import Backend exposing (Gallery, GrownPolycube)
+import Backend exposing (ExposedFaceHistograms, Gallery, GrownPolycube)
 import CellCountSlider
 import Compactness
 import Html exposing (Html, button, div, h2, p, section, span, text)
@@ -107,12 +107,13 @@ viewSampling sampling =
                 [ p [ Attr.class "explanation" ]
                     [ text
                         (String.fromInt gallery.sampleCount
-                            ++ " polycubes par procédé, rangés selon le remplissage de leur boîte englobante : plus la boîte est pleine, plus la forme est compacte."
+                            ++ " polycubes par procédé, tirage uniforme à gauche, croissance par voisin au hasard à droite, comparés par deux mesures de compacité."
                         )
                     ]
+                , viewExposedFaces gallery.exposedFaces
                 , div [ Attr.class "histograms" ]
-                    [ viewHistogram "uniform" "Tirage uniforme" gallery.uniformHistogram
-                    , viewHistogram "growth" "Croissance par voisin au hasard" gallery.growthHistogram
+                    [ viewHistogram "uniform" "Tirage uniforme : remplissage de la boîte englobante" fillRateAxis gallery.uniformHistogram
+                    , viewHistogram "growth" "Croissance : remplissage de la boîte englobante" fillRateAxis gallery.growthHistogram
                     ]
                 , h2 [] [ text "Tirages uniformes, du plus compact au moins compact" ]
                 , div [ Attr.class "gallery" ] (List.map viewShownPolycube gallery.shown)
@@ -125,8 +126,8 @@ viewSampling sampling =
 {-| Bars share the scale of their own histogram: the two samples are
 compared by shape, their sizes being equal.
 -}
-viewHistogram : String -> String -> List Int -> Html Msg
-viewHistogram className title polycubeCounts =
+viewHistogram : String -> String -> List String -> List Int -> Html Msg
+viewHistogram className title axisLabels polycubeCounts =
     let
         tallestCount =
             List.maximum polycubeCounts |> Maybe.withDefault 0 |> max 1
@@ -143,8 +144,65 @@ viewHistogram className title polycubeCounts =
         [ h2 [] [ text title ]
         , div [ Attr.class ("histogram " ++ className) ] (List.map viewBar polycubeCounts)
         , div [ Attr.class "histogram-axis" ]
-            (List.map (\label -> span [] [ text label ]) [ "boîte vide", "remplie à 50 %", "boîte pleine" ])
+            (List.map (\label -> span [] [ text label ]) axisLabels)
         ]
+
+
+fillRateAxis : List String
+fillRateAxis =
+    [ "boîte vide", "remplie à 50 %", "boîte pleine" ]
+
+
+{-| Faces on the outside: the fewer, the more compact. The rightmost bar
+holds the polycubes without loop, which show as many faces as their size
+allows.
+-}
+viewExposedFaces : ExposedFaceHistograms -> Html Msg
+viewExposedFaces exposedFaces =
+    let
+        largestFaceCount =
+            exposedFaces.smallestFaceCount + 2 * (List.length exposedFaces.uniform - 1)
+
+        axisLabels =
+            [ String.fromInt exposedFaces.smallestFaceCount ++ " faces (compact)"
+            , String.fromInt largestFaceCount ++ " faces (sans boucle)"
+            ]
+
+        viewSample className title polycubeCounts =
+            section []
+                [ viewHistogram className title axisLabels polycubeCounts
+                , p [ Attr.class "status" ] [ text (describeFaceCounts exposedFaces.smallestFaceCount polycubeCounts) ]
+                ]
+    in
+    div [ Attr.class "histograms" ]
+        [ viewSample "uniform" "Tirage uniforme : faces exposées" exposedFaces.uniform
+        , viewSample "growth" "Croissance : faces exposées" exposedFaces.growth
+        ]
+
+
+describeFaceCounts : Int -> List Int -> String
+describeFaceCounts smallestFaceCount polycubeCounts =
+    let
+        sampleCount =
+            List.sum polycubeCounts |> max 1
+
+        faceTotal =
+            List.indexedMap (\bin polycubeCount -> (smallestFaceCount + 2 * bin) * polycubeCount) polycubeCounts
+                |> List.sum
+
+        looplessCount =
+            List.reverse polycubeCounts |> List.head |> Maybe.withDefault 0
+
+        tenthsOfMean =
+            round (10 * toFloat faceTotal / toFloat sampleCount)
+    in
+    "Moyenne "
+        ++ String.fromInt (tenthsOfMean // 10)
+        ++ ","
+        ++ String.fromInt (modBy 10 tenthsOfMean)
+        ++ " faces ; sans boucle : "
+        ++ String.fromInt (round (100 * toFloat looplessCount / toFloat sampleCount))
+        ++ " %"
 
 
 viewShownPolycube : GrownPolycube -> Html Msg

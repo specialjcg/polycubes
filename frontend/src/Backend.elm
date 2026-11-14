@@ -1,6 +1,7 @@
 port module Backend exposing
     ( ClosedFormComparison
     , DrawnPolycube
+    , ExposedFaceHistograms
     , ExtensionSize
     , Gallery
     , EnumerationStep
@@ -98,7 +99,20 @@ type alias Gallery =
     { shown : List GrownPolycube
     , uniformHistogram : List Int
     , growthHistogram : List Int
+    , exposedFaces : ExposedFaceHistograms
     , sampleCount : Int
+    }
+
+
+{-| The same two samples counted by number of exposed faces: entry `i`
+counts the polycubes showing `smallestFaceCount + 2 * i` faces. The last
+entry is the most faces a polycube of that size can show, reached when it
+has no loop.
+-}
+type alias ExposedFaceHistograms =
+    { smallestFaceCount : Int
+    , uniform : List Int
+    , growth : List Int
     }
 
 
@@ -246,8 +260,17 @@ cellsDecoder =
 
 galleryDecoder : Decoder Gallery
 galleryDecoder =
-    Decode.map4 Gallery
+    Decode.map5 Gallery
         (Decode.field "shown" (Decode.list grownPolycubeDecoder))
         (Decode.field "uniformHistogram" (Decode.list Decode.int))
         (Decode.field "growthHistogram" (Decode.list Decode.int))
+        (Decode.field "exposedFaces" exposedFaceHistogramsDecoder)
         (Decode.field "sampleCount" Decode.int)
+
+
+exposedFaceHistogramsDecoder : Decoder ExposedFaceHistograms
+exposedFaceHistogramsDecoder =
+    Decode.map3 ExposedFaceHistograms
+        (Decode.field "smallestFaceCount" Decode.int)
+        (Decode.field "uniform" (Decode.list Decode.int))
+        (Decode.field "growth" (Decode.list Decode.int))

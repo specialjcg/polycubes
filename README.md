@@ -41,7 +41,15 @@ Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates
 - **Croissance biaisée contre tirage uniforme** : deux polycubes apparaissent cube par cube côte à côte. À gauche, chaque cube se colle sur une case libre voisine prise au hasard (croissance d'Eden, `grow_by_random_neighbour`), ce qui favorise les formes compactes. À droite, un polycube tiré uniformément, montré dans son ordre d'énumération : seul le polycube final est uniforme, pas ses étapes. Sous chaque vue, la boîte englobante et son taux de remplissage.
 - **Énumération de Redelmeier** (1 à 5 cubes) : l'algorithme polycube par polycube, dans l'ordre où il les visite. Cubes posés, cases en attente (vertes, translucides), cases écartées (cages rouges : déjà essayées plus haut dans l'arbre, interdites en dessous, d'où l'unicité), compteur par taille. Pause, pas à pas, rejouer. La trace vient de `trace_enumeration` (`polycubes-core`), bâtie sur `EnumerationCursor` ; le comptage fermé des 4 derniers cubes n'y figure pas, chaque polycube est visité.
 - **Formule fermée** (polycube de 1 à 6 cubes) : un polycube pris au hasard dans l'arbre d'énumération (descente aléatoire, non uniforme), ses cases en attente, et ses extensions par 1 à 4 cubes comptées deux fois : par la formule (`FrontierSums`, lue sur la frontière) et par une visite (`EnumerationCursor`, cube par cube). Les deux comptes sont affichés terme à terme, selon le nombre de cubes ajoutés au-delà des cases en attente ; la scène fait défiler au plus 40 extensions visitées par taille. Les chemins et carrés que la formule compte ne sont pas dessinés un par un.
-- **Galerie** (1 à 10 cubes) : 200 tirages uniformes et 200 croissances par voisin au hasard, comparés par le taux de remplissage de leur boîte englobante (histogrammes par dixième), puis 8 tirages uniformes répartis du plus compact au moins compact. Constat sur un échantillon (n = 8 et n = 10, une galerie chacun) : aucune boîte remplie à plus de 70 %, et les deux histogrammes se ressemblent beaucoup ; à ces tailles, la boîte englobante ne sépare pas nettement la croissance du tirage uniforme. Durée d'une galerie : 30 ms à n = 8, 1 s à n = 10 (une mesure chacun).
+- **Galerie** (1 à 10 cubes) : 200 tirages uniformes et 200 croissances par voisin au hasard, comparés par le taux de remplissage de leur boîte englobante (histogrammes par dixième), puis 8 tirages uniformes répartis du plus compact au moins compact. Seconde mesure, les **faces exposées** (`exposed_face_count`) : moins il y en a, plus la forme est compacte ; un polycube sans boucle en montre 4n + 2, le maximum. Constat sur 2000 polycubes par procédé (10 galeries, une série de mesures) :
+
+  | n | Faces, uniforme | Faces, croissance | Sans boucle, uniforme | Sans boucle, croissance |
+  |---|---|---|---|---|
+  | 6 | 25,69 | 25,36 | 85 % | 69 % |
+  | 8 | 33,40 | 32,63 | 74 % | 46 % |
+  | 10 | 41,15 | 39,71 | 65 % | 29 % |
+
+  Les faces exposées séparent nettement les deux procédés, et l'écart grandit avec n : la croissance par voisin referme des boucles bien plus souvent que le tirage uniforme. La boîte englobante, elle, les sépare à peine (aucune boîte remplie à plus de 70 %, histogrammes voisins). Durée d'une galerie : 30 ms à n = 8, 1 s à n = 10 (une mesure chacun).
 - **Tirage uniforme** : un polycube tiré uniformément, à faire tourner en 3D.
 
 Les deux pages de tirage vont de 1 à 12 cubes.
@@ -55,7 +63,7 @@ cargo run --release -p polycubes-app
 ```
 
 - `crates/polycubes-app/src/drawing.rs` : seule logique de la coque (taille acceptée, mémoire par taille, rang fourni par l'appelant) ; la commande Tauri de `lib.rs` y ajoute le hasard.
-- `crates/polycubes-app/src/gallery.rs` : tire les deux échantillons, range par dixième de remplissage, garde 8 tirages uniformes répartis selon le volume de la boîte.
+- `crates/polycubes-app/src/gallery.rs` : tire les deux échantillons, range par dixième de remplissage, garde 8 tirages uniformes répartis selon le volume de la boîte, compte les polycubes par nombre de faces exposées.
 - `crates/polycubes-app/src/growth.rs` : assemble la comparaison des deux croissances.
 - `crates/polycubes-app/src/closed_form.rs` : borne la taille à 6, range les extensions visitées par taille et par terme, garde 40 exemples par taille.
 - `crates/polycubes-app/src/enumeration.rs` : borne la taille tracée à 5 (639 polycubes) et joint à chaque nœud le compteur par taille.
@@ -133,7 +141,7 @@ Préalables absents du code : points de reprise sur disque, découpage en lots, 
 Rédigées dans `docs/preuves/`, sur un modèle de l'algorithme et non sur le Rust ligne à ligne ; chaque note liste ce qu'elle suppose.
 
 - [Le tirage par rang est uniforme](docs/preuves/tirage-uniforme.md) : lemme de Redelmeier (chaque polycube fixe visité une fois et une seule), puis bijection entre rangs et polycubes.
-- [Les formes compactes sont rares](docs/preuves/formes-compactes-rares.md) : la proportion de polycubes dont la boîte englobante est remplie à 38 % ou plus tend vers 0, à partir du seul a(16) recalculé ici (36 % avec a(22) d'OEIS). Résultat asymptotique, sans portée aux tailles affichées. Non prouvé : que le taux typique tend vers 0, et que la croissance par voisin favorise le compact.
+- [Les formes compactes sont rares](docs/preuves/formes-compactes-rares.md) : la proportion de polycubes dont la boîte englobante est remplie à 38 % ou plus tend vers 0, à partir du seul a(16) recalculé ici (36 % avec a(22) d'OEIS). Résultat asymptotique, sans portée aux tailles affichées. Non prouvé : que le taux typique tend vers 0, et que la croissance par voisin favorise le compact (observé sur échantillons par les faces exposées, voir la galerie).
 - [La formule fermée des 4 derniers cubes](docs/preuves/formule-quatre-cubes.md) : cas par cas, selon le nombre de cases libres ajoutées.
 
 Non relu par un tiers.

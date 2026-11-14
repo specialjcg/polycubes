@@ -1,6 +1,6 @@
 //! A sample of uniform draws sorted by compactness, for the frontend.
 
-use polycubes_sampling::grow_by_random_neighbour;
+use polycubes_sampling::{exposed_face_count, grow_by_random_neighbour};
 use serde::Serialize;
 
 use crate::drawing::{CellCount, DrawError, PolycubeDrawer};
@@ -39,7 +39,21 @@ pub struct Gallery {
     /// `i / BIN_COUNT` up to the next bin, the last one including full boxes.
     pub uniform_histogram: Vec<u32>,
     pub growth_histogram: Vec<u32>,
+    pub exposed_faces: ExposedFaceHistograms,
     pub sample_count: usize,
+}
+
+/// Polycubes per number of exposed faces, a second measure of compactness:
+/// the fewer faces outside, the more compact. Entry `i` counts the polycubes
+/// showing `smallest_face_count + 2 * i` faces; the last entry is the most
+/// faces a polycube of that size can show, `4n + 2`, reached when it has no
+/// loop.
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExposedFaceHistograms {
+    pub smallest_face_count: usize,
+    pub uniform: Vec<u32>,
+    pub growth: Vec<u32>,
 }
 
 /// Draws both samples; `choose_rank` and `choose_candidate` stand for the
@@ -69,13 +83,56 @@ pub fn build_gallery(
         let grown = grow_by_random_neighbour(cell_count, &mut choose_candidate);
         growth_sample.push(GrownPolycube::from_cells(grown));
     }
-    let uniform_histogram = fill_rate_histogram(&uniform_sample);
     Ok(Gallery {
-        shown: spread_by_compactness(uniform_sample),
-        uniform_histogram,
+        uniform_histogram: fill_rate_histogram(&uniform_sample),
         growth_histogram: fill_rate_histogram(&growth_sample),
+        exposed_faces: ExposedFaceHistograms::of(cell_count, &uniform_sample, &growth_sample),
         sample_count: SAMPLE_COUNT,
+        shown: spread_by_compactness(uniform_sample),
     })
+}
+
+/// Two faces vanish at each contact between cubes, so face counts of
+/// polycubes of the same size differ by multiples of this step.
+const FACE_COUNT_STEP: usize = 2;
+
+impl ExposedFaceHistograms {
+    fn of(
+        cell_count: usize,
+        uniform_sample: &[GrownPolycube],
+        growth_sample: &[GrownPolycube],
+    ) -> Self {
+        let uniform_face_counts = face_counts(uniform_sample);
+        let growth_face_counts = face_counts(growth_sample);
+        // A polycube without loop has one contact less than cubes.
+        let largest_face_count = 4 * cell_count + 2;
+        let smallest_face_count = uniform_face_counts
+            .iter()
+            .chain(&growth_face_counts)
+            .copied()
+            .min()
+            .unwrap_or(largest_face_count);
+        let bin_count = (largest_face_count - smallest_face_count) / FACE_COUNT_STEP + 1;
+        let histogram = |face_counts: &[usize]| {
+            let mut histogram = vec![0; bin_count];
+            for face_count in face_counts {
+                histogram[(face_count - smallest_face_count) / FACE_COUNT_STEP] += 1;
+            }
+            histogram
+        };
+        Self {
+            smallest_face_count,
+            uniform: histogram(&uniform_face_counts),
+            growth: histogram(&growth_face_counts),
+        }
+    }
+}
+
+fn face_counts(sample: &[GrownPolycube]) -> Vec<usize> {
+    sample
+        .iter()
+        .map(|polycube| exposed_face_count(&polycube.cells))
+        .collect()
 }
 
 fn box_volume(polycube: &GrownPolycube) -> usize {
@@ -186,6 +243,49 @@ mod tests {
         assert_eq!(
             gallery.growth_histogram[BIN_COUNT - 1] as usize,
             SAMPLE_COUNT
+        );
+    }
+
+    #[test]
+    fn exposed_face_histograms_hold_every_sampled_polycube() {
+        let gallery = sample_gallery();
+
+        let exposed_faces = &gallery.exposed_faces;
+        assert_eq!(exposed_faces.uniform.len(), exposed_faces.growth.len());
+        assert_eq!(
+            exposed_faces.uniform.iter().sum::<u32>() as usize,
+            SAMPLE_COUNT
+        );
+        assert_eq!(
+            exposed_faces.growth.iter().sum::<u32>() as usize,
+            SAMPLE_COUNT
+        );
+    }
+
+    #[test]
+    fn last_exposed_face_bin_is_the_polycube_without_loop() {
+        let gallery = sample_gallery();
+
+        let exposed_faces = &gallery.exposed_faces;
+        let largest_face_count =
+            exposed_faces.smallest_face_count + 2 * (exposed_faces.uniform.len() - 1);
+        assert_eq!(largest_face_count, 4 * SAMPLED_CELL_COUNT + 2);
+        // Most polycubes of five cells have no loop.
+        assert!(exposed_faces.uniform.last().is_some_and(|&count| count > 0));
+    }
+
+    #[test]
+    fn two_cubes_always_show_ten_faces() {
+        let gallery = build_gallery(&mut PolycubeDrawer::default(), 2, |_| 0, |_| 0)
+            .expect("two cells can be sampled");
+
+        assert_eq!(
+            gallery.exposed_faces,
+            ExposedFaceHistograms {
+                smallest_face_count: 10,
+                uniform: vec![200],
+                growth: vec![200],
+            }
         );
     }
 
