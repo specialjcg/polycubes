@@ -8,7 +8,6 @@ use polycubes_core::Coordinates;
 
 use crate::budding::{moved_onto, orientations};
 use crate::colony::face_neighbours;
-use crate::evolution::Limits;
 
 /// Neighbours of a polycube are the other polycubes it shares a face with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +20,16 @@ pub struct PolycubeLifeRule {
     pub most_neighbours_to_be_born: usize,
 }
 
+/// How long the game is played, and where: no cell stands farther than
+/// `reach` from the origin along any axis. A world keeps the game going,
+/// where a limit on the population would freeze it: births never stop, so
+/// crowding and deaths never do either.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PolycubeWorld {
+    pub generation_count: usize,
+    pub reach: i32,
+}
+
 /// One polycube of a generation: `identity` is its birth rank over the
 /// whole game, the same as long as it lives.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,7 +38,7 @@ pub struct LivingPolycube {
     pub cells: Vec<Coordinates>,
 }
 
-/// Plays `limits.generation_count` generations from `seed` alone and
+/// Plays `world.generation_count` generations from `seed` alone and
 /// returns them all, the seed first.
 ///
 /// All polycubes change at once, from the generation before. One with more
@@ -37,14 +46,13 @@ pub struct LivingPolycube {
 /// child when `buds` says so: the seed turned any way, never mirrored,
 /// against its parent, over no cell taken before or during the generation,
 /// and with a number of neighbours among the generation before that the
-/// rule allows. `choose` picks the child among the number of such places,
-/// and must answer an index below that number. None is born once the
-/// generation holds `limits.population` cells.
+/// rule allows, within the world. `choose` picks the child among the number
+/// of such places, and must answer an index below that number.
 #[must_use]
 pub fn live_as_polycubes(
     seed: &[Coordinates],
     rule: PolycubeLifeRule,
-    limits: Limits,
+    world: PolycubeWorld,
     mut buds: impl FnMut() -> bool,
     mut choose: impl FnMut(usize) -> usize,
 ) -> Vec<Vec<LivingPolycube>> {
@@ -58,7 +66,7 @@ pub fn live_as_polycubes(
     }
     let orientations = orientations(seed);
     let mut next_identity = 1;
-    for _ in 0..limits.generation_count {
+    for _ in 0..world.generation_count {
         let before = Generation::of(&living);
         let mut next: Vec<LivingPolycube> = living
             .iter()
@@ -68,13 +76,11 @@ pub fn live_as_polycubes(
             .collect();
         let mut taken: HashSet<Coordinates> = before.rank_by_cell.keys().copied().collect();
         for parent in &living {
-            if (next.len() + 1) * seed.len() > limits.population {
-                break;
-            }
             if !buds() {
                 continue;
             }
-            let mut birthplaces = before.birthplaces(&parent.cells, &orientations, &taken, rule);
+            let mut birthplaces =
+                before.birthplaces(&parent.cells, &orientations, &taken, (rule, world));
             if birthplaces.is_empty() {
                 continue;
             }
@@ -90,6 +96,12 @@ pub fn live_as_polycubes(
         generations.push(living.clone());
     }
     generations
+}
+
+impl PolycubeWorld {
+    fn holds(self, cell: Coordinates) -> bool {
+        cell.iter().all(|coordinate| coordinate.abs() <= self.reach)
+    }
 }
 
 /// The polycubes of one generation, found by their cells.
@@ -137,7 +149,7 @@ impl<'living> Generation<'living> {
         parent: &[Coordinates],
         orientations: &[Vec<Coordinates>],
         taken: &HashSet<Coordinates>,
-        rule: PolycubeLifeRule,
+        (rule, world): (PolycubeLifeRule, PolycubeWorld),
     ) -> Vec<Vec<Coordinates>> {
         let landings: BTreeSet<Coordinates> = parent
             .iter()
@@ -152,7 +164,9 @@ impl<'living> Generation<'living> {
             for &anchor in orientation {
                 for &landing in &landings {
                     let birthplace = moved_onto(orientation, anchor, landing);
-                    if birthplace.iter().any(|cell| taken.contains(cell))
+                    if birthplace
+                        .iter()
+                        .any(|cell| taken.contains(cell) || !world.holds(*cell))
                         || !allowed_neighbour_counts
                             .contains(&self.ranks_leant_on(&birthplace).len())
                     {

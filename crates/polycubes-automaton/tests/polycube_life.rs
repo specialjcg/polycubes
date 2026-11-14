@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use polycubes_automaton::{Limits, LivingPolycube, PolycubeLifeRule, live_as_polycubes};
+use polycubes_automaton::{LivingPolycube, PolycubeLifeRule, PolycubeWorld, live_as_polycubes};
 use polycubes_core::Coordinates;
 
 /// A tetracube that differs from its mirror image.
@@ -12,9 +12,9 @@ const RULE: PolycubeLifeRule = PolycubeLifeRule {
     most_neighbours_to_be_born: 2,
 };
 
-const LIMITS: Limits = Limits {
-    generation_count: 10,
-    population: 400,
+const WORLD: PolycubeWorld = PolycubeWorld {
+    generation_count: 14,
+    reach: 3,
 };
 
 fn step(from: Coordinates, to: Coordinates) -> Coordinates {
@@ -62,14 +62,14 @@ fn varied_choice() -> impl FnMut(usize) -> usize {
 }
 
 fn played() -> Vec<Vec<LivingPolycube>> {
-    live_as_polycubes(&SCREW, RULE, LIMITS, || true, varied_choice())
+    live_as_polycubes(&SCREW, RULE, WORLD, || true, varied_choice())
 }
 
 #[test]
 fn life_starts_from_the_seed_alone() {
     let generations = played();
 
-    assert_eq!(generations.len(), LIMITS.generation_count + 1);
+    assert_eq!(generations.len(), WORLD.generation_count + 1);
     assert_eq!(generations[0].len(), 1);
     assert_eq!(generations[0][0].cells, SCREW);
 }
@@ -129,6 +129,29 @@ fn a_polycube_is_born_against_one_or_two_of_the_living() {
             );
         }
     }
+}
+
+#[test]
+fn no_polycube_leaves_the_world_yet_births_go_on_to_the_end() {
+    let generations = played();
+
+    for cell in generations
+        .iter()
+        .flatten()
+        .flat_map(|polycube| &polycube.cells)
+    {
+        assert!(
+            cell.iter()
+                .all(|coordinate| coordinate.abs() <= WORLD.reach)
+        );
+    }
+    let last_two = &generations[generations.len() - 2..];
+    assert!(
+        last_two[1]
+            .iter()
+            .any(|polycube| !last_two[0].contains(polycube)),
+        "the world froze"
+    );
 }
 
 #[test]

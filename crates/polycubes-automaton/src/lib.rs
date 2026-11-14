@@ -13,5 +13,5 @@ pub use budding::{Lineage, grow_by_budding, grow_by_mutating_buds};
 pub use census::{Census, census};
 pub use colony::grow_colony;
 pub use evolution::{Evolution, Fate, Limits, evolve, next_generation};
-pub use polycube_life::{LivingPolycube, PolycubeLifeRule, live_as_polycubes};
+pub use polycube_life::{LivingPolycube, PolycubeLifeRule, PolycubeWorld, live_as_polycubes};
 pub use rule::{Neighbourhood, Rule, RuleError};
