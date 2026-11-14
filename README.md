@@ -34,9 +34,9 @@ cargo run --release -p polycubes-sampling --example draw -- 12 200000000
 
 Coût d'un tirage, 1 thread, sans table de sous-arbres : n = 10 en 4 ms, n = 12 en 0,2 s, n = 13 en 1,3 s (une mesure chacun). Chaque tirage refait l'équivalent d'environ deux énumérations ; une table des sous-arbres peu profonds supprimerait ce coût.
 
-Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates/polycubes-cli` (binaire), `crates/polycubes-sampling` (tirage), `crates/polycubes-app` (coque Tauri), `frontend/` (Elm + Three.js).
+Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates/polycubes-cli` (binaire), `crates/polycubes-sampling` (tirage), `crates/polycubes-automaton` (automate cellulaire), `crates/polycubes-app` (coque Tauri), `frontend/` (Elm + Three.js).
 
-**Application de bureau** (`crates/polycubes-app` + `frontend/`) : Tauri 2, interface Elm, rendu Three.js. Six pages :
+**Application de bureau** (`crates/polycubes-app` + `frontend/`) : Tauri 2, interface Elm, rendu Three.js. Sept pages :
 
 - **Croissance biaisée contre tirage uniforme** : deux polycubes apparaissent cube par cube côte à côte. À gauche, chaque cube se colle sur une case libre voisine prise au hasard (croissance d'Eden, `grow_by_random_neighbour`), ce qui favorise les formes compactes. À droite, un polycube tiré uniformément, montré dans son ordre d'énumération : seul le polycube final est uniforme, pas ses étapes. Sous chaque vue, la boîte englobante et son taux de remplissage.
 - **Énumération de Redelmeier** (1 à 5 cubes) : l'algorithme polycube par polycube, dans l'ordre où il les visite. Cubes posés, cases en attente (vertes, translucides), cases écartées (cages rouges : déjà essayées plus haut dans l'arbre, interdites en dessous, d'où l'unicité), compteur par taille. Pause, pas à pas, rejouer. La trace vient de `trace_enumeration` (`polycubes-core`), bâtie sur `EnumerationCursor` ; le comptage fermé des 4 derniers cubes n'y figure pas, chaque polycube est visité.
@@ -64,6 +64,7 @@ Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates
   - **Le plus de boucles** (`most_looped_polycubes`) : le carré 2×2 à 4 cubes, le cube 2×2×2 privé d'un coin à 7, le cube 2×2×2 à 8, seul polycube de cette taille à 5 boucles.
   - **Boucles sans carré 2×2** (`most_looped_square_free_polycubes`) : la boucle fait le tour d'un vide. Il faut 6 cubes : c'est le cube 2×2×2 privé de deux coins opposés, 4 orientations. À 8 cubes, 42 formes dont l'anneau plat 3×3. À 9 cubes, une seule forme atteint 2 boucles sans carré.
   - **Arbres les plus ramassés** (`tightest_tree_polycubes`) : sans boucle, dans la boîte au plus petit grand côté puis au plus petit volume. À 5 cubes un seul arbre tient dans 2×2×2 ; à 6 et 7 cubes aucun, les plus ramassés sont plats (1×3×3).
+- **Automate** (graines de 1 à 9 cubes) : automate cellulaire 3D (`crates/polycubes-automaton`) où un polycube sert de graine. À chaque génération une cellule survit, meurt ou naît selon son nombre de voisines vivantes. Graine au choix : tirage uniforme, croissance par voisin, ou polycube le plus bouclé. Trois règles : deux à 26 voisines (survit à 4–5 et naît à 5 ; survit à 5–7 et naît à 6, les deux règles 3D étudiées par Carter Bays, citées de mémoire) et une à 6 voisines (survit à 2–3, naît à 2–3). La page rejoue les générations en boucle et annonce le destin de la graine : extinction, forme figée, cycle, déplacement, ou sans conclusion après 60 générations ou 300 cellules. Le **recensement** (jusqu'à 6 cubes) lance tous les polycubes fixes d'une taille. Exemple mesuré, règle 4–5 / 5 : à 6 cubes, 3 141 s'éteignent, 220 se figent, 120 entrent dans un cycle ; à 5 cubes ou moins, tous s'éteignent. Balayage de 1 920 règles à 6 voisines sur les graines de 5 cubes : aucune forme qui se déplace.
 - **Tirage uniforme** : un polycube tiré uniformément, à faire tourner en 3D.
 
 Les deux pages de tirage vont de 1 à 12 cubes.

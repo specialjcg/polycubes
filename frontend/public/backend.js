@@ -26,8 +26,22 @@ const relayedCommands = [
   { command: "find_remarkable", request: "requestRemarkable", result: "remarkableFinishedPort" },
 ];
 
-for (const { command, request, result } of relayedCommands) {
-  app.ports[request].subscribe(async (cellCount) => {
+// Commands whose request port carries the whole argument object.
+const relayedRequests = [
+  {
+    command: "run_automaton",
+    request: "requestAutomatonRunPort",
+    result: "automatonRunFinishedPort",
+  },
+  {
+    command: "census_automaton",
+    request: "requestAutomatonCensusPort",
+    result: "automatonCensusFinishedPort",
+  },
+];
+
+function relay(command, request, result, toArguments) {
+  app.ports[request].subscribe(async (payload) => {
     if (!invoke) {
       app.ports[result].send({
         error: "moteur de calcul absent, ouvrir cette page depuis l'application de bureau",
@@ -35,11 +49,18 @@ for (const { command, request, result } of relayedCommands) {
       return;
     }
     try {
-      app.ports[result].send({ ok: await invoke(command, { cellCount }) });
+      app.ports[result].send({ ok: await invoke(command, toArguments(payload)) });
     } catch (error) {
       app.ports[result].send({ error: String(error) });
     }
   });
+}
+
+for (const { command, request, result } of relayedCommands) {
+  relay(command, request, result, (cellCount) => ({ cellCount }));
+}
+for (const { command, request, result } of relayedRequests) {
+  relay(command, request, result, (requestArguments) => requestArguments);
 }
 
 app.ports.ready.send(null);

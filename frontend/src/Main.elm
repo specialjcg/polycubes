@@ -9,6 +9,7 @@ import Browser
 import Html exposing (Html, button, h1, main_, nav, text)
 import Html.Attributes as Attr
 import Html.Events exposing (onClick)
+import Page.Automaton
 import Page.ClosedForm
 import Page.Draw
 import Page.Enumeration
@@ -23,6 +24,7 @@ type Page
     | ClosedFormPage
     | GalleryPage
     | RemarkablePage
+    | AutomatonPage
     | DrawPage
 
 
@@ -33,6 +35,7 @@ type alias Model =
     , closedForm : Page.ClosedForm.Model
     , gallery : Page.Gallery.Model
     , remarkable : Page.Remarkable.Model
+    , automaton : Page.Automaton.Model
     , draw : Page.Draw.Model
     }
 
@@ -45,6 +48,7 @@ type Msg
     | ClosedFormMsg Page.ClosedForm.Msg
     | GalleryMsg Page.Gallery.Msg
     | RemarkableMsg Page.Remarkable.Msg
+    | AutomatonMsg Page.Automaton.Msg
     | DrawMsg Page.Draw.Msg
 
 
@@ -66,6 +70,7 @@ init =
     , closedForm = Page.ClosedForm.init
     , gallery = Page.Gallery.init
     , remarkable = Page.Remarkable.init
+    , automaton = Page.Automaton.init
     , draw = Page.Draw.init
     }
 
@@ -90,6 +95,9 @@ update msg model =
                 ( remarkable, remarkableCmd ) =
                     Page.Remarkable.start model.remarkable
 
+                ( automaton, automatonCmd ) =
+                    Page.Automaton.start model.automaton
+
                 ( draw, drawCmd ) =
                     Page.Draw.start model.draw
             in
@@ -99,6 +107,7 @@ update msg model =
                 , closedForm = closedForm
                 , gallery = gallery
                 , remarkable = remarkable
+                , automaton = automaton
                 , draw = draw
               }
             , Cmd.batch
@@ -107,6 +116,7 @@ update msg model =
                 , Cmd.map ClosedFormMsg closedFormCmd
                 , Cmd.map GalleryMsg galleryCmd
                 , Cmd.map RemarkableMsg remarkableCmd
+                , Cmd.map AutomatonMsg automatonCmd
                 , Cmd.map DrawMsg drawCmd
                 ]
             )
@@ -149,6 +159,13 @@ update msg model =
             in
             ( { model | remarkable = remarkable }, Cmd.map RemarkableMsg remarkableCmd )
 
+        AutomatonMsg automatonMsg ->
+            let
+                ( automaton, automatonCmd ) =
+                    Page.Automaton.update automatonMsg model.automaton
+            in
+            ( { model | automaton = automaton }, Cmd.map AutomatonMsg automatonCmd )
+
         DrawMsg drawMsg ->
             let
                 ( draw, drawCmd ) =
@@ -166,6 +183,7 @@ subscriptions model =
         , Sub.map ClosedFormMsg (Page.ClosedForm.subscriptions model.closedForm)
         , Sub.map GalleryMsg Page.Gallery.subscriptions
         , Sub.map RemarkableMsg Page.Remarkable.subscriptions
+        , Sub.map AutomatonMsg (Page.Automaton.subscriptions model.automaton)
         , Sub.map DrawMsg Page.Draw.subscriptions
         ]
 
@@ -180,6 +198,7 @@ view model =
             , viewPageButton model.shownPage ClosedFormPage "Formule fermée"
             , viewPageButton model.shownPage GalleryPage "Galerie"
             , viewPageButton model.shownPage RemarkablePage "Remarquables"
+            , viewPageButton model.shownPage AutomatonPage "Automate"
             , viewPageButton model.shownPage DrawPage "Tirage uniforme"
             ]
         , case model.shownPage of
@@ -197,6 +216,9 @@ view model =
 
             RemarkablePage ->
                 Html.map RemarkableMsg (Page.Remarkable.view model.remarkable)
+
+            AutomatonPage ->
+                Html.map AutomatonMsg (Page.Automaton.view model.automaton)
 
             DrawPage ->
                 Html.map DrawMsg (Page.Draw.view model.draw)
