@@ -34,6 +34,10 @@ pub const COLONY_DIVISION_CHANCE: f64 = 0.4;
 
 const BUDDING_GENERATION_COUNT: usize = 16;
 
+/// Mutating polycubes drawn at most: beyond, the branches merge into a
+/// lump where shapes can no longer be told apart.
+const MUTATION_POLYCUBE_LIMIT: usize = 60;
+
 /// Share of the polycubes that try to bud at each generation.
 pub const BUDDING_CHANCE: f64 = 0.5;
 
@@ -178,7 +182,7 @@ pub fn bud_mutants(
     let lineage = grow_by_mutating_buds(
         seed,
         BUDDING_GENERATION_COUNT,
-        COLONY_POPULATION_LIMIT,
+        MUTATION_POLYCUBE_LIMIT * seed.len(),
         buds,
         choose,
     );
@@ -246,7 +250,7 @@ mod tests {
         let run = bud_mutants(&SEED, || true, |_| 0);
 
         let last_copy_count = run.generations.last().map_or(0, Vec::len) / SEED.len();
-        assert!(last_copy_count > 1);
+        assert_eq!(last_copy_count, MUTATION_POLYCUBE_LIMIT);
         assert_eq!(run.parent_of_copy.len(), last_copy_count);
     }
 
