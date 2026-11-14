@@ -8,6 +8,7 @@ shapes; the second shows what a typical polycube looks like.
 
 import Backend exposing (GrownPolycube, GrowthComparison)
 import CellCountSlider
+import Compactness
 import Html exposing (Html, button, div, h2, p, section, text)
 import Html.Attributes as Attr
 import Html.Events exposing (onClick)
@@ -165,27 +166,5 @@ viewGrownPolycube title explanation shownCellCount grownPolycube =
         [ h2 [] [ text title ]
         , p [ Attr.class "explanation" ] [ text explanation ]
         , Scene.viewFirstCells shownCellCount grownPolycube.cells
-        , p [ Attr.class "status" ] [ text (describeBoundingBox grownPolycube) ]
+        , p [ Attr.class "status" ] [ text (Compactness.describe grownPolycube) ]
         ]
-
-
-{-| The fuller the bounding box, the more compact the polycube.
--}
-describeBoundingBox : GrownPolycube -> String
-describeBoundingBox grownPolycube =
-    let
-        boxVolume =
-            List.product grownPolycube.boundingBox
-
-        filledPercentage =
-            if boxVolume == 0 then
-                0
-
-            else
-                round (100 * toFloat (List.length grownPolycube.cells) / toFloat boxVolume)
-    in
-    "Boîte englobante "
-        ++ String.join " × " (List.map String.fromInt grownPolycube.boundingBox)
-        ++ ", remplie à "
-        ++ String.fromInt filledPercentage
-        ++ " %"
