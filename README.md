@@ -41,15 +41,25 @@ Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates
 - **Croissance biaisée contre tirage uniforme** : deux polycubes apparaissent cube par cube côte à côte. À gauche, chaque cube se colle sur une case libre voisine prise au hasard (croissance d'Eden, `grow_by_random_neighbour`), ce qui favorise les formes compactes. À droite, un polycube tiré uniformément, montré dans son ordre d'énumération : seul le polycube final est uniforme, pas ses étapes. Sous chaque vue, la boîte englobante et son taux de remplissage.
 - **Énumération de Redelmeier** (1 à 5 cubes) : l'algorithme polycube par polycube, dans l'ordre où il les visite. Cubes posés, cases en attente (vertes, translucides), cases écartées (cages rouges : déjà essayées plus haut dans l'arbre, interdites en dessous, d'où l'unicité), compteur par taille. Pause, pas à pas, rejouer. La trace vient de `trace_enumeration` (`polycubes-core`), bâtie sur `EnumerationCursor` ; le comptage fermé des 4 derniers cubes n'y figure pas, chaque polycube est visité.
 - **Formule fermée** (polycube de 1 à 6 cubes) : un polycube pris au hasard dans l'arbre d'énumération (descente aléatoire, non uniforme), ses cases en attente, et ses extensions par 1 à 4 cubes comptées deux fois : par la formule (`FrontierSums`, lue sur la frontière) et par une visite (`EnumerationCursor`, cube par cube). Les deux comptes sont affichés terme à terme, selon le nombre de cubes ajoutés au-delà des cases en attente ; la scène fait défiler au plus 40 extensions visitées par taille. Les chemins et carrés que la formule compte ne sont pas dessinés un par un.
-- **Galerie** (1 à 10 cubes) : 200 tirages uniformes et 200 croissances par voisin au hasard, comparés par le taux de remplissage de leur boîte englobante (histogrammes par dixième), puis 8 tirages uniformes répartis du plus compact au moins compact. Seconde mesure, les **faces exposées** (`exposed_face_count`) : moins il y en a, plus la forme est compacte ; un polycube sans boucle en montre 4n + 2, le maximum. Constat sur 2000 polycubes par procédé (10 galeries, une série de mesures) :
+- **Galerie** (1 à 10 cubes) : 200 tirages uniformes et 200 croissances par voisin au hasard, comparés par le taux de remplissage de leur boîte englobante (histogrammes par dixième), puis 8 tirages uniformes répartis du plus compact au moins compact. Seconde mesure, les **faces exposées** (`exposed_face_count`) : moins il y en a, plus la forme est compacte ; un polycube sans boucle en montre 4n + 2, le maximum. Mesure large (`examples/loopless_share.rs`, une exécution, 94 s) : côté uniforme, valeur **exacte** par visite de tous les polycubes fixes ; côté croissance, 1 000 000 de tirages par taille, intervalle de Wilson à 95 %.
 
-  | n | Faces, uniforme | Faces, croissance | Sans boucle, uniforme | Sans boucle, croissance |
-  |---|---|---|---|---|
-  | 6 | 25,69 | 25,36 | 85 % | 69 % |
-  | 8 | 33,40 | 32,63 | 74 % | 46 % |
-  | 10 | 41,15 | 39,71 | 65 % | 29 % |
+  | n | Polycubes fixes | Sans boucle, uniforme (exact) | Sans boucle, croissance [95 %] | Faces moyennes, uniforme | Faces moyennes, croissance | Maximum 4n + 2 |
+  |---|---|---|---|---|---|---|
+  | 4 | 86 | 96,51 % | 93,85 % [93,80 ; 93,90] | 17,930 | 17,877 | 18 |
+  | 5 | 534 | 91,01 % | 83,08 % [83,00 ; 83,15] | 21,820 | 21,662 | 22 |
+  | 6 | 3 481 | 85,23 % | 70,31 % [70,22 ; 70,40] | 25,694 | 25,374 | 26 |
+  | 7 | 23 502 | 79,77 % | 57,61 % [57,51 ; 57,71] | 29,562 | 29,026 | 30 |
+  | 8 | 162 913 | 74,72 % | 46,00 % [45,90 ; 46,10] | 33,427 | 32,624 | 34 |
+  | 9 | 1 152 870 | 70,03 % | 36,19 % [36,09 ; 36,28] | 37,292 | 36,186 | 38 |
+  | 10 | 8 294 738 | 65,67 % | 28,03 % [27,94 ; 28,11] | 41,157 | 39,703 | 42 |
+  | 11 | 60 494 549 | 61,60 % | 21,45 % [21,37 ; 21,53] | 45,021 | 43,183 | 46 |
 
-  Les faces exposées séparent nettement les deux procédés, et l'écart grandit avec n : la croissance par voisin referme des boucles bien plus souvent que le tirage uniforme. La boîte englobante, elle, les sépare à peine (aucune boîte remplie à plus de 70 %, histogrammes voisins). Durée d'une galerie : 30 ms à n = 8, 1 s à n = 10 (une mesure chacun).
+  Lecture. Les faces exposées séparent nettement les deux procédés, et l'écart grandit avec n. Chaque boucle retire 2 faces au maximum : à n = 11, un polycube uniforme a en moyenne 0,49 contact de trop pour être un arbre, un polycube grandi par voisin 1,41, soit près de trois fois plus. La part sans boucle baisse aussi côté uniforme (environ 6 % de moins par cube ajouté) : « typiquement sans boucle » n'est donc vrai qu'aux petites tailles ; ce qui tient, c'est « peu de boucles, et bien moins que la croissance ». La boîte englobante, elle, sépare à peine les deux procédés à ces tailles (aucune boîte remplie à plus de 70 % sur 200 tirages, histogrammes voisins).
+
+  ```bash
+  cargo run --release -p polycubes-sampling --example loopless_share -- 11 1000000
+  ```
+
 - **Tirage uniforme** : un polycube tiré uniformément, à faire tourner en 3D.
 
 Les deux pages de tirage vont de 1 à 12 cubes.

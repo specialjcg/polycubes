@@ -2344,6 +2344,7 @@ name = "polycubes-sampling"
 version = "0.1.0"
 dependencies = [
  "polycubes-core",
+ "rand",
 ]
 
 [[package]]
