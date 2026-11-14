@@ -73,3 +73,74 @@ fn visited_extensions_are_distinct_and_disjoint_from_the_polycube() {
         assert!(seen_extensions.insert(cells), "{extension:?} visited twice");
     }
 }
+
+/// Largest size whose polycubes are all checked: 105 polycubes of at most 4
+/// cells, every one a node of the enumeration tree.
+const LARGEST_EXHAUSTIVE_SIZE: usize = 4;
+
+/// Extensions of the current node found by visiting, sorted like the
+/// formula.
+fn count_by_visiting(
+    cursor: &mut polycubes_core::EnumerationCursor,
+    frontier: &HashSet<Coordinates>,
+    placed_cell_count: usize,
+    counts: &mut [[u64; 4]; 4],
+) {
+    for candidate_index in 0..cursor.candidate_count() {
+        cursor.descend(candidate_index);
+        let added_cells = cursor.cells().split_off(placed_cell_count);
+        let deeper_cell_count = added_cells
+            .iter()
+            .filter(|cell| !frontier.contains(*cell))
+            .count();
+        counts[added_cells.len() - 1][deeper_cell_count] += 1;
+        count_by_visiting(cursor, frontier, placed_cell_count, counts);
+        cursor.ascend();
+    }
+}
+
+/// Checks every node of `placed_cell_count` cells below the current one;
+/// returns how many were checked.
+fn check_nodes_of_size(
+    cursor: &mut polycubes_core::EnumerationCursor,
+    placed_cell_count: usize,
+) -> usize {
+    let current_cell_count = cursor.cells().len();
+    if current_cell_count == placed_cell_count {
+        let frontier: HashSet<Coordinates> = cursor.candidates().into_iter().collect();
+        let formula_counts = cursor.closed_form_extension_counts();
+        let mut visited_counts = [[0; 4]; 4];
+        count_by_visiting(cursor, &frontier, placed_cell_count, &mut visited_counts);
+        assert_eq!(
+            formula_counts,
+            visited_counts,
+            "polycube {:?}",
+            cursor.cells()
+        );
+        return 1;
+    }
+    let mut checked_node_count = 0;
+    for candidate_index in 0..cursor.candidate_count() {
+        cursor.descend(candidate_index);
+        checked_node_count += check_nodes_of_size(cursor, placed_cell_count);
+        cursor.ascend();
+    }
+    checked_node_count
+}
+
+#[test]
+fn formula_matches_the_visit_on_every_polycube_of_at_most_four_cells() {
+    /// OEIS A001931: fixed polycubes of 1 to 4 cells.
+    const KNOWN_FIXED_COUNTS: [usize; LARGEST_EXHAUSTIVE_SIZE] = [1, 3, 15, 86];
+
+    for placed_cell_count in 1..=LARGEST_EXHAUSTIVE_SIZE {
+        let mut cursor = polycubes_core::EnumerationCursor::new(placed_cell_count + 4);
+
+        let checked_node_count = check_nodes_of_size(&mut cursor, placed_cell_count);
+
+        assert_eq!(
+            checked_node_count,
+            KNOWN_FIXED_COUNTS[placed_cell_count - 1]
+        );
+    }
+}
