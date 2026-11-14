@@ -2328,6 +2328,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "polycubes-automaton"
+version = "0.1.0"
+dependencies = [
+ "polycubes-core",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "polycubes-cli"
 version = "0.1.0"
 dependencies = [
