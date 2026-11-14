@@ -7,21 +7,22 @@ port module Backend exposing
     , EnumerationStep
     , GrownPolycube
     , GrowthComparison
-    , MostLoopedPolycubes
+    , RemarkablePolycubes
     , RemarkableShape
+    , ShapeFamily
     , closedFormComparisonFinished
     , drawFinished
     , enumerationTraceFinished
     , galleryFinished
     , growthComparisonFinished
-    , mostLoopedFinished
+    , remarkableFinished
     , ready
     , requestClosedFormComparison
     , requestDraw
     , requestEnumerationTrace
     , requestGallery
     , requestGrowthComparison
-    , requestMostLooped
+    , requestRemarkable
     )
 
 {-| Calls to the Rust backend, relayed by `public/backend.js`.
@@ -120,13 +121,27 @@ type alias ExposedFaceHistograms =
     }
 
 
-{-| The shapes of a size that hold the most loops. Each shape stands for
-`orientationCount` fixed polycubes, itself turned around.
+{-| Three families of exceptional polycubes of one size: those with the
+most loops, those with the most loops among the polycubes holding no 2 × 2
+square (absent when none has a loop), and the trees fitting in the smallest
+box.
 -}
-type alias MostLoopedPolycubes =
+type alias RemarkablePolycubes =
+    { mostLooped : ShapeFamily
+    , squareFreeLoops : Maybe ShapeFamily
+    , tightestTrees : ShapeFamily
+    }
+
+
+{-| Shapes sharing an extreme. `shown` holds the most symmetric ones; each
+shape stands for `orientationCount` fixed polycubes, itself turned around.
+-}
+type alias ShapeFamily =
     { loopCount : Int
     , exposedFaceCount : Int
-    , shapes : List RemarkableShape
+    , shapeCount : Int
+    , fixedCount : Int
+    , shown : List RemarkableShape
     }
 
 
@@ -199,17 +214,17 @@ galleryFinished toMsg =
     galleryFinishedPort (decodeResult galleryDecoder >> toMsg)
 
 
-{-| Asks for the polycubes of the given size with the most loops.
+{-| Asks for the exceptional polycubes of the given size.
 -}
-port requestMostLooped : Int -> Cmd msg
+port requestRemarkable : Int -> Cmd msg
 
 
-port mostLoopedFinishedPort : (Decode.Value -> msg) -> Sub msg
+port remarkableFinishedPort : (Decode.Value -> msg) -> Sub msg
 
 
-mostLoopedFinished : (Result String MostLoopedPolycubes -> msg) -> Sub msg
-mostLoopedFinished toMsg =
-    mostLoopedFinishedPort (decodeResult mostLoopedDecoder >> toMsg)
+remarkableFinished : (Result String RemarkablePolycubes -> msg) -> Sub msg
+remarkableFinished toMsg =
+    remarkableFinishedPort (decodeResult remarkableDecoder >> toMsg)
 
 
 drawFinished : (Result String DrawnPolycube -> msg) -> Sub msg
@@ -309,12 +324,22 @@ exposedFaceHistogramsDecoder =
         (Decode.field "growth" (Decode.list Decode.int))
 
 
-mostLoopedDecoder : Decoder MostLoopedPolycubes
-mostLoopedDecoder =
-    Decode.map3 MostLoopedPolycubes
+remarkableDecoder : Decoder RemarkablePolycubes
+remarkableDecoder =
+    Decode.map3 RemarkablePolycubes
+        (Decode.field "mostLooped" shapeFamilyDecoder)
+        (Decode.field "squareFreeLoops" (Decode.nullable shapeFamilyDecoder))
+        (Decode.field "tightestTrees" shapeFamilyDecoder)
+
+
+shapeFamilyDecoder : Decoder ShapeFamily
+shapeFamilyDecoder =
+    Decode.map5 ShapeFamily
         (Decode.field "loopCount" Decode.int)
         (Decode.field "exposedFaceCount" Decode.int)
-        (Decode.field "shapes" (Decode.list remarkableShapeDecoder))
+        (Decode.field "shapeCount" Decode.int)
+        (Decode.field "fixedCount" Decode.int)
+        (Decode.field "shown" (Decode.list remarkableShapeDecoder))
 
 
 remarkableShapeDecoder : Decoder RemarkableShape

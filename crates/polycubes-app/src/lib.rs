@@ -17,7 +17,7 @@ use drawing::{CellCount, DrawnPolycube, PolycubeDrawer};
 use enumeration::TracedStep;
 use gallery::Gallery;
 use growth::GrowthComparison;
-use remarkable::MostLoopedPolycubes;
+use remarkable::RemarkablePolycubes;
 
 /// Draws a fixed polycube of `cell_count` cells uniformly at random.
 #[tauri::command(async)]
@@ -92,10 +92,10 @@ fn build_gallery(
     .map_err(|error| error.to_string())
 }
 
-/// Finds the polycubes of `cell_count` cells with the most loops.
+/// Finds the exceptional polycubes of `cell_count` cells.
 #[tauri::command(async)]
-fn find_most_looped(cell_count: usize) -> Result<MostLoopedPolycubes, String> {
-    remarkable::find_most_looped(cell_count).map_err(|error| error.to_string())
+fn find_remarkable(cell_count: usize) -> Result<RemarkablePolycubes, String> {
+    remarkable::find_remarkable(cell_count).map_err(|error| error.to_string())
 }
 
 /// Runs the desktop application until its window is closed.
@@ -112,7 +112,7 @@ pub fn run() {
             trace_enumeration,
             compare_closed_form,
             build_gallery,
-            find_most_looped
+            find_remarkable
         ])
         .run(tauri::generate_context!())
         .expect("the desktop application failed to start");

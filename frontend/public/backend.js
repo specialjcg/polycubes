@@ -23,7 +23,7 @@ const relayedCommands = [
     result: "closedFormComparisonFinishedPort",
   },
   { command: "build_gallery", request: "requestGallery", result: "galleryFinishedPort" },
-  { command: "find_most_looped", request: "requestMostLooped", result: "mostLoopedFinishedPort" },
+  { command: "find_remarkable", request: "requestRemarkable", result: "remarkableFinishedPort" },
 ];
 
 for (const { command, request, result } of relayedCommands) {

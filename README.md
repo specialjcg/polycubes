@@ -60,7 +60,10 @@ Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates
   cargo run --release -p polycubes-sampling --example loopless_share -- 11 1000000
   ```
 
-- **Remarquables** (1 à 9 cubes) : les polycubes qui portent le plus de boucles à cette taille, trouvés en visitant tous les polycubes fixes (`most_looped_polycubes`) et regroupés à rotation près. On y voit le carré 2×2 (seul tétracube avec une boucle), le cube 2×2×2 privé d'un coin à 7 cubes, et le cube 2×2×2, seul polycube de 8 cubes à 5 boucles.
+- **Remarquables** (1 à 9 cubes) : trois familles d'exceptions, trouvées en visitant tous les polycubes fixes et regroupées à rotation près (au plus 3 formes montrées par famille, les plus symétriques).
+  - **Le plus de boucles** (`most_looped_polycubes`) : le carré 2×2 à 4 cubes, le cube 2×2×2 privé d'un coin à 7, le cube 2×2×2 à 8, seul polycube de cette taille à 5 boucles.
+  - **Boucles sans carré 2×2** (`most_looped_square_free_polycubes`) : la boucle fait le tour d'un vide. Il faut 6 cubes : c'est le cube 2×2×2 privé de deux coins opposés, 4 orientations. À 8 cubes, 42 formes dont l'anneau plat 3×3. À 9 cubes, une seule forme atteint 2 boucles sans carré.
+  - **Arbres les plus ramassés** (`tightest_tree_polycubes`) : sans boucle, dans la boîte au plus petit grand côté puis au plus petit volume. À 5 cubes un seul arbre tient dans 2×2×2 ; à 6 et 7 cubes aucun, les plus ramassés sont plats (1×3×3).
 - **Tirage uniforme** : un polycube tiré uniformément, à faire tourner en 3D.
 
 Les deux pages de tirage vont de 1 à 12 cubes.
