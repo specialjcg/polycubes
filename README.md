@@ -12,7 +12,7 @@ Dénombrement des polycubes de n cubes. Aucune formule connue ; objectif à term
 
 ## Ce qui existe
 
-Algorithme de Redelmeier généralisé au réseau cubique, compte les polycubes **fixes**. Les 4 derniers cubes sont comptés en formule fermée, sans visiter les polycubes : un balayage de la frontière (cellules non-essayées, leurs voisins libres, chemins de 2 pas, carrés unité) fournit les sommes de `FrontierSums`, dont `extension_counts` déduit le nombre d'ajouts de 1 à 4 cubes (`crates/polycubes-core/src/redelmeier.rs`). Formule dérivée ici, validée seulement par les tests : totaux OEIS, et comparaison terme à terme avec une visite sur 72 polycubes de 1 à 6 cubes (`tests/frontier_extensions.rs`). Parallélisme : chaque thread parcourt l'arbre jusqu'à la taille 6 et réclame les sous-arbres (23 502) dans un registre atomique partagé ; aucune dépendance externe.
+Algorithme de Redelmeier généralisé au réseau cubique, compte les polycubes **fixes**. Les 4 derniers cubes sont comptés en formule fermée, sans visiter les polycubes : un balayage de la frontière (cellules non-essayées, leurs voisins libres, chemins de 2 pas, carrés unité) fournit les sommes de `FrontierSums`, dont `extension_counts` déduit le nombre d'ajouts de 1 à 4 cubes (`crates/polycubes-core/src/redelmeier.rs`). Formule dérivée ici, prouvée dans `docs/preuves/formule-quatre-cubes.md` et validée par les tests : totaux OEIS, comparaison terme à terme avec une visite sur tous les polycubes de 1 à 4 cubes (105) et sur 72 polycubes de 1 à 6 cubes (`tests/frontier_extensions.rs`). Parallélisme : chaque thread parcourt l'arbre jusqu'à la taille 6 et réclame les sous-arbres (23 502) dans un registre atomique partagé ; aucune dépendance externe.
 
 **Polycubes à rotation près (A000162)** par le lemme de Burnside sur les 24 rotations (`crates/polycubes-core/src/symmetry.rs`) : (fixes + Σ polycubes envoyés sur un translaté d'eux-mêmes par chaque rotation) / 24. Une rotation par classe de conjugaison (tailles 3, 6, 6, 8). Pour chaque rotation et chaque décalage possible, un Redelmeier restreint aux polycubes invariants abandonne une branche dès que les images restant à placer ne tiennent plus ou que l'une d'elles a été écartée. Mono-thread, non optimisé.
 
@@ -127,6 +127,16 @@ Prix relevés par recherche web le 2026-11-13 : Hetzner AX162 199 €/mois + 79 
 Mesure sur `gpu-ollama` (2026-11-13) : 2 × Xeon Gold 6146, 24 cœurs physiques, 48 threads. Fixes n = 13 sur 1 thread : 1,54 s, machine saturée par un autre calcul (charge 46). Même mesure sur ce portable chargé : 2,26 s. Un thread du Xeon vaut donc 1 à 1,5 thread du portable. Extrapolation : 1,54 s × A001931(19) / A001931(9) × (1 à 1,5) ÷ 48 threads = 210 à 315 jours, machine entièrement dédiée. Une seule mesure, courte, sous charge.
 
 Préalables absents du code : points de reprise sur disque, découpage en lots, vérification croisée du résultat (deux exécutions indépendantes ou somme de contrôle par lot).
+
+## Preuves
+
+Rédigées dans `docs/preuves/`, sur un modèle de l'algorithme et non sur le Rust ligne à ligne ; chaque note liste ce qu'elle suppose.
+
+- [Le tirage par rang est uniforme](docs/preuves/tirage-uniforme.md) : lemme de Redelmeier (chaque polycube fixe visité une fois et une seule), puis bijection entre rangs et polycubes.
+- [Les formes compactes sont rares](docs/preuves/formes-compactes-rares.md) : la proportion de polycubes dont la boîte englobante est remplie à 38 % ou plus tend vers 0, à partir du seul a(16) recalculé ici (36 % avec a(22) d'OEIS). Résultat asymptotique, sans portée aux tailles affichées. Non prouvé : que le taux typique tend vers 0, et que la croissance par voisin favorise le compact.
+- [La formule fermée des 4 derniers cubes](docs/preuves/formule-quatre-cubes.md) : cas par cas, selon le nombre de cases libres ajoutées.
+
+Non relu par un tiers. Pas encore de preuve formelle (Lean).
 
 ## Pistes
 
