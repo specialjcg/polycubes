@@ -46,7 +46,7 @@ pub fn compare_growths(
 }
 
 impl GrownPolycube {
-    fn from_cells(cells: Vec<Coordinates>) -> Self {
+    pub(crate) fn from_cells(cells: Vec<Coordinates>) -> Self {
         Self {
             bounding_box: bounding_box(&cells),
             cells,

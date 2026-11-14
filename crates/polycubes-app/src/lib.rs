@@ -6,6 +6,7 @@
 pub mod closed_form;
 pub mod drawing;
 pub mod enumeration;
+pub mod gallery;
 pub mod growth;
 
 use std::sync::Mutex;
@@ -13,6 +14,7 @@ use std::sync::Mutex;
 use closed_form::ClosedFormComparison;
 use drawing::{CellCount, DrawnPolycube, PolycubeDrawer};
 use enumeration::TracedStep;
+use gallery::Gallery;
 use growth::GrowthComparison;
 
 /// Draws a fixed polycube of `cell_count` cells uniformly at random.
@@ -69,6 +71,25 @@ fn compare_closed_form(cell_count: usize) -> Result<ClosedFormComparison, String
     .map_err(|error| error.to_string())
 }
 
+/// Samples uniform draws and neighbour growths of `cell_count` cells and
+/// sorts them by compactness.
+#[tauri::command(async)]
+fn build_gallery(
+    cell_count: usize,
+    drawer: tauri::State<'_, Mutex<PolycubeDrawer>>,
+) -> Result<Gallery, String> {
+    let mut drawer = drawer
+        .lock()
+        .map_err(|_| "a previous draw failed, restart the application".to_owned())?;
+    gallery::build_gallery(
+        &mut drawer,
+        cell_count,
+        |polycube_count| rand::random_range(0..polycube_count),
+        |candidate_count| rand::random_range(0..candidate_count),
+    )
+    .map_err(|error| error.to_string())
+}
+
 /// Runs the desktop application until its window is closed.
 ///
 /// # Panics
@@ -81,7 +102,8 @@ pub fn run() {
             draw_uniform_polycube,
             compare_growths,
             trace_enumeration,
-            compare_closed_form
+            compare_closed_form,
+            build_gallery
         ])
         .run(tauri::generate_context!())
         .expect("the desktop application failed to start");

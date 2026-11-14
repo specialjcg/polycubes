@@ -2,17 +2,20 @@ port module Backend exposing
     ( ClosedFormComparison
     , DrawnPolycube
     , ExtensionSize
+    , Gallery
     , EnumerationStep
     , GrownPolycube
     , GrowthComparison
     , closedFormComparisonFinished
     , drawFinished
     , enumerationTraceFinished
+    , galleryFinished
     , growthComparisonFinished
     , ready
     , requestClosedFormComparison
     , requestDraw
     , requestEnumerationTrace
+    , requestGallery
     , requestGrowthComparison
     )
 
@@ -86,6 +89,19 @@ type alias ExtensionSize =
     }
 
 
+{-| A sample of uniform draws and one of polycubes grown by random
+neighbour. Each histogram counts the polycubes per tenth of fill rate of the
+bounding box, from the emptiest boxes to the fullest; `shown` holds some of
+the uniform draws, from the most compact to the least.
+-}
+type alias Gallery =
+    { shown : List GrownPolycube
+    , uniformHistogram : List Int
+    , growthHistogram : List Int
+    , sampleCount : Int
+    }
+
+
 {-| Fires once `public/backend.js` listens to the requests. A request sent
 earlier, from `init` for instance, would be lost.
 -}
@@ -134,6 +150,19 @@ port closedFormComparisonFinishedPort : (Decode.Value -> msg) -> Sub msg
 closedFormComparisonFinished : (Result String ClosedFormComparison -> msg) -> Sub msg
 closedFormComparisonFinished toMsg =
     closedFormComparisonFinishedPort (decodeResult closedFormComparisonDecoder >> toMsg)
+
+
+{-| Asks for a gallery of polycubes of the given size.
+-}
+port requestGallery : Int -> Cmd msg
+
+
+port galleryFinishedPort : (Decode.Value -> msg) -> Sub msg
+
+
+galleryFinished : (Result String Gallery -> msg) -> Sub msg
+galleryFinished toMsg =
+    galleryFinishedPort (decodeResult galleryDecoder >> toMsg)
 
 
 drawFinished : (Result String DrawnPolycube -> msg) -> Sub msg
@@ -213,3 +242,12 @@ extensionSizeDecoder =
 cellsDecoder : Decoder (List Cell)
 cellsDecoder =
     Decode.list Polycube.cellDecoder
+
+
+galleryDecoder : Decoder Gallery
+galleryDecoder =
+    Decode.map4 Gallery
+        (Decode.field "shown" (Decode.list grownPolycubeDecoder))
+        (Decode.field "uniformHistogram" (Decode.list Decode.int))
+        (Decode.field "growthHistogram" (Decode.list Decode.int))
+        (Decode.field "sampleCount" Decode.int)

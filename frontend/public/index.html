@@ -28,6 +28,16 @@
     .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .side-by-side polycube-scene { height: 440px; }
     .enumeration polycube-scene { height: 400px; }
+    nav { flex-wrap: wrap; }
+    .gallery { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+    .gallery section { min-width: 0; }
+    .gallery polycube-scene { height: 190px; }
+    .gallery .status { margin: 4px 0 0; font-size: 0.85rem; }
+    .histograms { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 12px; }
+    .histogram { display: grid; grid-template-columns: repeat(10, 1fr); gap: 4px; align-items: end; height: 120px; border-bottom: 1px solid #8a7a66; }
+    .histogram .bar { background: #b5651d; min-height: 0; }
+    .histogram.growth .bar { background: #2f8f6b; }
+    .histogram-axis { display: flex; justify-content: space-between; font-size: 0.85rem; color: #5c4f40; }
     .closed-form { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
     .closed-form polycube-scene { height: 440px; }
     .legend .added::before { background: #3b6fb5; border: 1px solid #3c2818; }

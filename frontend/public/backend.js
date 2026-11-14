@@ -22,6 +22,7 @@ const relayedCommands = [
     request: "requestClosedFormComparison",
     result: "closedFormComparisonFinishedPort",
   },
+  { command: "build_gallery", request: "requestGallery", result: "galleryFinishedPort" },
 ];
 
 for (const { command, request, result } of relayedCommands) {

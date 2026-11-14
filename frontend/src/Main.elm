@@ -12,6 +12,7 @@ import Html.Events exposing (onClick)
 import Page.ClosedForm
 import Page.Draw
 import Page.Enumeration
+import Page.Gallery
 import Page.Growth
 
 
@@ -19,6 +20,7 @@ type Page
     = GrowthPage
     | EnumerationPage
     | ClosedFormPage
+    | GalleryPage
     | DrawPage
 
 
@@ -27,6 +29,7 @@ type alias Model =
     , growth : Page.Growth.Model
     , enumeration : Page.Enumeration.Model
     , closedForm : Page.ClosedForm.Model
+    , gallery : Page.Gallery.Model
     , draw : Page.Draw.Model
     }
 
@@ -37,6 +40,7 @@ type Msg
     | GrowthMsg Page.Growth.Msg
     | EnumerationMsg Page.Enumeration.Msg
     | ClosedFormMsg Page.ClosedForm.Msg
+    | GalleryMsg Page.Gallery.Msg
     | DrawMsg Page.Draw.Msg
 
 
@@ -56,6 +60,7 @@ init =
     , growth = Page.Growth.init
     , enumeration = Page.Enumeration.init
     , closedForm = Page.ClosedForm.init
+    , gallery = Page.Gallery.init
     , draw = Page.Draw.init
     }
 
@@ -74,14 +79,24 @@ update msg model =
                 ( closedForm, closedFormCmd ) =
                     Page.ClosedForm.start model.closedForm
 
+                ( gallery, galleryCmd ) =
+                    Page.Gallery.start model.gallery
+
                 ( draw, drawCmd ) =
                     Page.Draw.start model.draw
             in
-            ( { model | growth = growth, enumeration = enumeration, closedForm = closedForm, draw = draw }
+            ( { model
+                | growth = growth
+                , enumeration = enumeration
+                , closedForm = closedForm
+                , gallery = gallery
+                , draw = draw
+              }
             , Cmd.batch
                 [ Cmd.map GrowthMsg growthCmd
                 , Cmd.map EnumerationMsg enumerationCmd
                 , Cmd.map ClosedFormMsg closedFormCmd
+                , Cmd.map GalleryMsg galleryCmd
                 , Cmd.map DrawMsg drawCmd
                 ]
             )
@@ -110,6 +125,13 @@ update msg model =
             in
             ( { model | closedForm = closedForm }, Cmd.map ClosedFormMsg closedFormCmd )
 
+        GalleryMsg galleryMsg ->
+            let
+                ( gallery, galleryCmd ) =
+                    Page.Gallery.update galleryMsg model.gallery
+            in
+            ( { model | gallery = gallery }, Cmd.map GalleryMsg galleryCmd )
+
         DrawMsg drawMsg ->
             let
                 ( draw, drawCmd ) =
@@ -125,6 +147,7 @@ subscriptions model =
         , Sub.map GrowthMsg (Page.Growth.subscriptions model.growth)
         , Sub.map EnumerationMsg (Page.Enumeration.subscriptions model.enumeration)
         , Sub.map ClosedFormMsg (Page.ClosedForm.subscriptions model.closedForm)
+        , Sub.map GalleryMsg Page.Gallery.subscriptions
         , Sub.map DrawMsg Page.Draw.subscriptions
         ]
 
@@ -134,9 +157,10 @@ view model =
     main_ []
         [ h1 [] [ text "Polycubes" ]
         , nav []
-            [ viewPageButton model.shownPage GrowthPage "Croissance biaisée contre tirage uniforme"
+            [ viewPageButton model.shownPage GrowthPage "Croissance contre tirage"
             , viewPageButton model.shownPage EnumerationPage "Énumération de Redelmeier"
             , viewPageButton model.shownPage ClosedFormPage "Formule fermée"
+            , viewPageButton model.shownPage GalleryPage "Galerie"
             , viewPageButton model.shownPage DrawPage "Tirage uniforme"
             ]
         , case model.shownPage of
@@ -148,6 +172,9 @@ view model =
 
             ClosedFormPage ->
                 Html.map ClosedFormMsg (Page.ClosedForm.view model.closedForm)
+
+            GalleryPage ->
+                Html.map GalleryMsg (Page.Gallery.view model.gallery)
 
             DrawPage ->
                 Html.map DrawMsg (Page.Draw.view model.draw)
