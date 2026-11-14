@@ -11,9 +11,11 @@ use std::thread;
 use crate::lattice::{Lattice, NEIGHBOUR_COUNT};
 
 mod cursor;
+mod frontier;
 mod trace;
 
 pub use cursor::EnumerationCursor;
+pub use frontier::{FrontierExtensions, frontier_extensions};
 pub use trace::{EnumerationStep, trace_enumeration};
 
 /// Number of final cells counted in closed form instead of being enumerated.

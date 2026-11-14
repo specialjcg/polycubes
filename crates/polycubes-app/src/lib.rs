@@ -3,12 +3,14 @@
 //! No rule lives here: commands parse their input, call the crates and
 //! serialise the result.
 
+pub mod closed_form;
 pub mod drawing;
 pub mod enumeration;
 pub mod growth;
 
 use std::sync::Mutex;
 
+use closed_form::ClosedFormComparison;
 use drawing::{CellCount, DrawnPolycube, PolycubeDrawer};
 use enumeration::TracedStep;
 use growth::GrowthComparison;
@@ -57,6 +59,16 @@ fn trace_enumeration(cell_count: usize) -> Result<Vec<TracedStep>, String> {
     enumeration::trace_enumeration(cell_count).map_err(|error| error.to_string())
 }
 
+/// Picks a polycube of `cell_count` cells at random in the enumeration tree
+/// and counts its extensions by the closed formula and by visiting them.
+#[tauri::command(async)]
+fn compare_closed_form(cell_count: usize) -> Result<ClosedFormComparison, String> {
+    closed_form::compare_closed_form(cell_count, |candidate_count| {
+        rand::random_range(0..candidate_count)
+    })
+    .map_err(|error| error.to_string())
+}
+
 /// Runs the desktop application until its window is closed.
 ///
 /// # Panics
@@ -68,7 +80,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             draw_uniform_polycube,
             compare_growths,
-            trace_enumeration
+            trace_enumeration,
+            compare_closed_form
         ])
         .run(tauri::generate_context!())
         .expect("the desktop application failed to start");

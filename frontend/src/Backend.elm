@@ -1,12 +1,16 @@
 port module Backend exposing
-    ( DrawnPolycube
+    ( ClosedFormComparison
+    , DrawnPolycube
+    , ExtensionSize
     , EnumerationStep
     , GrownPolycube
     , GrowthComparison
+    , closedFormComparisonFinished
     , drawFinished
     , enumerationTraceFinished
     , growthComparisonFinished
     , ready
+    , requestClosedFormComparison
     , requestDraw
     , requestEnumerationTrace
     , requestGrowthComparison
@@ -61,6 +65,27 @@ type alias EnumerationStep =
     }
 
 
+{-| A polycube met by the enumeration, the cells waiting to extend it, and
+its extensions: entry `added - 1` holds those that add `added` cells.
+-}
+type alias ClosedFormComparison =
+    { placed : Polycube
+    , candidates : List Cell
+    , extensionSizes : List ExtensionSize
+    }
+
+
+{-| The extensions adding a given number of cells, counted by the closed
+formula and by visiting them. Both counts are split by how many added cells
+lie beyond the waiting cells; `examples` holds some of the visited ones.
+-}
+type alias ExtensionSize =
+    { formulaCounts : List Int
+    , visitedCounts : List Int
+    , examples : List (List Cell)
+    }
+
+
 {-| Fires once `public/backend.js` listens to the requests. A request sent
 earlier, from `init` for instance, would be lost.
 -}
@@ -95,6 +120,20 @@ port enumerationTraceFinishedPort : (Decode.Value -> msg) -> Sub msg
 enumerationTraceFinished : (Result String (List EnumerationStep) -> msg) -> Sub msg
 enumerationTraceFinished toMsg =
     enumerationTraceFinishedPort (decodeResult (Decode.list enumerationStepDecoder) >> toMsg)
+
+
+{-| Asks for a polycube of the given size and both counts of its
+extensions.
+-}
+port requestClosedFormComparison : Int -> Cmd msg
+
+
+port closedFormComparisonFinishedPort : (Decode.Value -> msg) -> Sub msg
+
+
+closedFormComparisonFinished : (Result String ClosedFormComparison -> msg) -> Sub msg
+closedFormComparisonFinished toMsg =
+    closedFormComparisonFinishedPort (decodeResult closedFormComparisonDecoder >> toMsg)
 
 
 drawFinished : (Result String DrawnPolycube -> msg) -> Sub msg
@@ -148,12 +187,29 @@ grownPolycubeDecoder =
 
 enumerationStepDecoder : Decoder EnumerationStep
 enumerationStepDecoder =
-    let
-        cellsDecoder =
-            Decode.list Polycube.cellDecoder
-    in
     Decode.map4 EnumerationStep
         (Decode.field "placed" cellsDecoder)
         (Decode.field "candidates" cellsDecoder)
         (Decode.field "discarded" cellsDecoder)
         (Decode.field "countsBySize" (Decode.list Decode.int))
+
+
+closedFormComparisonDecoder : Decoder ClosedFormComparison
+closedFormComparisonDecoder =
+    Decode.map3 ClosedFormComparison
+        (Decode.field "placed" cellsDecoder)
+        (Decode.field "candidates" cellsDecoder)
+        (Decode.field "extensionSizes" (Decode.list extensionSizeDecoder))
+
+
+extensionSizeDecoder : Decoder ExtensionSize
+extensionSizeDecoder =
+    Decode.map3 ExtensionSize
+        (Decode.field "formulaCounts" (Decode.list Decode.int))
+        (Decode.field "visitedCounts" (Decode.list Decode.int))
+        (Decode.field "examples" (Decode.list cellsDecoder))
+
+
+cellsDecoder : Decoder (List Cell)
+cellsDecoder =
+    Decode.list Polycube.cellDecoder

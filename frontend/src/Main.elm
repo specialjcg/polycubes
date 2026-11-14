@@ -9,6 +9,7 @@ import Browser
 import Html exposing (Html, button, h1, main_, nav, text)
 import Html.Attributes as Attr
 import Html.Events exposing (onClick)
+import Page.ClosedForm
 import Page.Draw
 import Page.Enumeration
 import Page.Growth
@@ -17,6 +18,7 @@ import Page.Growth
 type Page
     = GrowthPage
     | EnumerationPage
+    | ClosedFormPage
     | DrawPage
 
 
@@ -24,6 +26,7 @@ type alias Model =
     { shownPage : Page
     , growth : Page.Growth.Model
     , enumeration : Page.Enumeration.Model
+    , closedForm : Page.ClosedForm.Model
     , draw : Page.Draw.Model
     }
 
@@ -33,6 +36,7 @@ type Msg
     | PageChosen Page
     | GrowthMsg Page.Growth.Msg
     | EnumerationMsg Page.Enumeration.Msg
+    | ClosedFormMsg Page.ClosedForm.Msg
     | DrawMsg Page.Draw.Msg
 
 
@@ -51,6 +55,7 @@ init =
     { shownPage = GrowthPage
     , growth = Page.Growth.init
     , enumeration = Page.Enumeration.init
+    , closedForm = Page.ClosedForm.init
     , draw = Page.Draw.init
     }
 
@@ -66,13 +71,17 @@ update msg model =
                 ( enumeration, enumerationCmd ) =
                     Page.Enumeration.start model.enumeration
 
+                ( closedForm, closedFormCmd ) =
+                    Page.ClosedForm.start model.closedForm
+
                 ( draw, drawCmd ) =
                     Page.Draw.start model.draw
             in
-            ( { model | growth = growth, enumeration = enumeration, draw = draw }
+            ( { model | growth = growth, enumeration = enumeration, closedForm = closedForm, draw = draw }
             , Cmd.batch
                 [ Cmd.map GrowthMsg growthCmd
                 , Cmd.map EnumerationMsg enumerationCmd
+                , Cmd.map ClosedFormMsg closedFormCmd
                 , Cmd.map DrawMsg drawCmd
                 ]
             )
@@ -94,6 +103,13 @@ update msg model =
             in
             ( { model | enumeration = enumeration }, Cmd.map EnumerationMsg enumerationCmd )
 
+        ClosedFormMsg closedFormMsg ->
+            let
+                ( closedForm, closedFormCmd ) =
+                    Page.ClosedForm.update closedFormMsg model.closedForm
+            in
+            ( { model | closedForm = closedForm }, Cmd.map ClosedFormMsg closedFormCmd )
+
         DrawMsg drawMsg ->
             let
                 ( draw, drawCmd ) =
@@ -108,6 +124,7 @@ subscriptions model =
         [ Backend.ready (\_ -> BackendReady)
         , Sub.map GrowthMsg (Page.Growth.subscriptions model.growth)
         , Sub.map EnumerationMsg (Page.Enumeration.subscriptions model.enumeration)
+        , Sub.map ClosedFormMsg (Page.ClosedForm.subscriptions model.closedForm)
         , Sub.map DrawMsg Page.Draw.subscriptions
         ]
 
@@ -119,6 +136,7 @@ view model =
         , nav []
             [ viewPageButton model.shownPage GrowthPage "Croissance biaisée contre tirage uniforme"
             , viewPageButton model.shownPage EnumerationPage "Énumération de Redelmeier"
+            , viewPageButton model.shownPage ClosedFormPage "Formule fermée"
             , viewPageButton model.shownPage DrawPage "Tirage uniforme"
             ]
         , case model.shownPage of
@@ -127,6 +145,9 @@ view model =
 
             EnumerationPage ->
                 Html.map EnumerationMsg (Page.Enumeration.view model.enumeration)
+
+            ClosedFormPage ->
+                Html.map ClosedFormMsg (Page.ClosedForm.view model.closedForm)
 
             DrawPage ->
                 Html.map DrawMsg (Page.Draw.view model.draw)

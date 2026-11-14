@@ -27,17 +27,21 @@ viewFirstCells shownCellCount polycube =
         []
 
 
-{-| Shows a polycube with the cells waiting to extend it and those it may
-no longer hold, framed for the largest polycube to come, so that the view
+{-| Shows a polycube with the cells waiting to extend it, those it may no
+longer hold and those of an extension, framed for the largest polycube to come, so that the view
 does not move from one polycube to the next.
 -}
-viewAmongNeighbours : { largestCellCount : Int, candidates : List Cell, discarded : List Cell } -> Polycube -> Html msg
+viewAmongNeighbours :
+    { largestCellCount : Int, candidates : List Cell, discarded : List Cell, added : List Cell }
+    -> Polycube
+    -> Html msg
 viewAmongNeighbours neighbours polycube =
     Html.node "polycube-scene"
         [ Attr.attribute "extent" (String.fromInt neighbours.largestCellCount)
         , cellsAttribute polycube
         , encodedCellsAttribute "candidates" neighbours.candidates
         , encodedCellsAttribute "discarded" neighbours.discarded
+        , encodedCellsAttribute "added" neighbours.added
         ]
         []
 

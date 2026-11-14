@@ -1,6 +1,6 @@
 //! Step-by-step walk of the enumeration tree.
 
-use super::Enumerator;
+use super::{CLOSED_FORM_CELL_COUNT, Enumerator};
 use crate::lattice::{Coordinates, Lattice};
 
 /// A position in the enumeration tree of the fixed polycubes of at most
@@ -98,6 +98,27 @@ impl EnumerationCursor {
         self.enumerator
             .extend(self.first_untried, placed_cell_count);
         self.enumerator.counts[self.max_cell_count - 1]
+    }
+
+    /// Ways to add one to four cells to the polycube of the current node,
+    /// counted by the closed formula without visiting them: row
+    /// `added - 1`, column number of added cells that are not candidates.
+    ///
+    /// # Panics
+    ///
+    /// Panics if fewer than four cells may still be added: the formula
+    /// would count cells outside the lattice.
+    #[must_use]
+    pub fn closed_form_extension_counts(
+        &self,
+    ) -> [[u64; CLOSED_FORM_CELL_COUNT]; CLOSED_FORM_CELL_COUNT] {
+        assert!(
+            self.placed_cells.len() + CLOSED_FORM_CELL_COUNT <= self.max_cell_count,
+            "the closed formula needs room for four more cells"
+        );
+        self.enumerator
+            .frontier_sums(self.first_untried)
+            .extension_counts_by_free_cell_count()
     }
 
     /// Cells of the polycube of the current node, in placement order.

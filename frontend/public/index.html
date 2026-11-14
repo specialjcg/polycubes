@@ -28,6 +28,11 @@
     .side-by-side { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .side-by-side polycube-scene { height: 440px; }
     .enumeration polycube-scene { height: 400px; }
+    .closed-form { display: grid; grid-template-columns: 3fr 2fr; gap: 16px; align-items: start; }
+    .closed-form polycube-scene { height: 440px; }
+    .legend .added::before { background: #3b6fb5; border: 1px solid #3c2818; }
+    .counts .total th, .counts .total td { font-weight: 600; border-top: 2px solid #8a7a66; }
+    .counts th:first-child { text-align: left; }
     .error { color: #a3261a; }
     .legend { display: flex; gap: 20px; flex-wrap: wrap; margin: 8px 0; padding: 0; list-style: none; }
     .legend li::before { content: ""; display: inline-block; width: 12px; height: 12px; margin-right: 6px; vertical-align: -1px; box-sizing: border-box; }

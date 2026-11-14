@@ -216,6 +216,7 @@ viewStep cellCount walk step =
             { largestCellCount = cellCount
             , candidates = step.candidates
             , discarded = step.discarded
+            , added = []
             }
             step.placed
         , p [ Attr.class "status" ]

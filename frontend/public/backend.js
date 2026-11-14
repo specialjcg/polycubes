@@ -17,6 +17,11 @@ const relayedCommands = [
     request: "requestEnumerationTrace",
     result: "enumerationTraceFinishedPort",
   },
+  {
+    command: "compare_closed_form",
+    request: "requestClosedFormComparison",
+    result: "closedFormComparisonFinishedPort",
+  },
 ];
 
 for (const { command, request, result } of relayedCommands) {

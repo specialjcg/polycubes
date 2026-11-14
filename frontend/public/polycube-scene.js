@@ -1,7 +1,9 @@
 // <polycube-scene cells="[[x,y,z],...]" shown="n"> : 3D view of a polycube.
 // `shown` limits the view to the first n cells; without it all are shown.
 // `candidates` and `discarded` list cells drawn around the polycube: those
-// waiting to extend it, and those it may no longer hold. `extent="n"` frames
+// waiting to extend it, and those it may no longer hold. `added` lists cells
+// drawn as cubes of another colour: an extension of the polycube.
+// `extent="n"` frames
 // the room every polycube of at most n cells fits in, so that the view stays
 // still while the polycube changes.
 // The Elm application owns the state; this element only draws what its
@@ -18,6 +20,7 @@ const CANDIDATE_SIDE = 0.7;
 const CANDIDATE_OPACITY = 0.35;
 const DISCARDED_COLOUR = 0xa3261a;
 const DISCARDED_SIDE = 0.45;
+const ADDED_COLOUR = 0x3b6fb5;
 // Share of the room of all polycubes that the camera frames: most polycubes
 // stay near the first cell, so framing the whole room would shrink them;
 // only the straightest ones graze the border.
@@ -29,7 +32,7 @@ const APPEARANCE_MILLISECONDS = 260;
 const SMALLEST_VISIBLE_SCALE = 0.001;
 
 class PolycubeScene extends HTMLElement {
-  static observedAttributes = ["cells", "shown", "candidates", "discarded", "extent"];
+  static observedAttributes = ["cells", "shown", "candidates", "discarded", "added", "extent"];
 
   connectedCallback() {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -123,6 +126,9 @@ class PolycubeScene extends HTMLElement {
     });
     for (const cell of this.cellsOf("candidates")) {
       builderByKey.set(`candidate ${cell}`, () => buildCandidateCube(cell));
+    }
+    for (const cell of this.cellsOf("added")) {
+      builderByKey.set(`added ${cell}`, () => buildAddedCube(cell));
     }
     for (const cell of this.cellsOf("discarded")) {
       builderByKey.set(`discarded ${cell}`, () => buildDiscardedCube(cell));
@@ -219,6 +225,13 @@ function buildPlacedCube(cell, placementIndex, placementProgress) {
   const cube = buildCube(cell, CUBE_SIDE, new THREE.MeshStandardMaterial({ color: colour }));
   cube.add(buildEdges(cube.geometry, EDGE_COLOUR));
   cube.userData.placementIndex = placementIndex;
+  return cube;
+}
+
+// A cell of an extension of the polycube, told apart by its colour.
+function buildAddedCube(cell) {
+  const cube = buildCube(cell, CUBE_SIDE, new THREE.MeshStandardMaterial({ color: ADDED_COLOUR }));
+  cube.add(buildEdges(cube.geometry, EDGE_COLOUR));
   return cube;
 }
 
