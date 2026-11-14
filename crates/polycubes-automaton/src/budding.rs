@@ -169,7 +169,7 @@ fn is_in_one_piece(cells: &[Coordinates]) -> bool {
 
 /// Every way to turn `seed`, each once: quarter turns about two axes reach
 /// all 24 rotations of the cube, and no mirror image.
-fn orientations(seed: &[Coordinates]) -> Vec<Vec<Coordinates>> {
+pub(crate) fn orientations(seed: &[Coordinates]) -> Vec<Vec<Coordinates>> {
     let quarter_turns: [fn(Coordinates) -> Coordinates; 2] =
         [|[x, y, z]| [x, -z, y], |[x, y, z]| [z, y, -x]];
     let mut orientations = vec![seed.to_vec()];
