@@ -383,40 +383,46 @@ impl FrontierSums {
     /// is bipartite: two cells two steps apart are never neighbours, which
     /// keeps the cases below disjoint.
     fn extension_counts(&self) -> [u64; CLOSED_FORM_CELL_COUNT] {
+        self.extension_counts_by_free_cell_count()
+            .map(|counts_by_free_cell_count| counts_by_free_cell_count.iter().sum())
+    }
+
+    /// Ways to add one to four cells, split by how many of them are free
+    /// cells rather than untried ones: row `added - 1`, column free cells.
+    fn extension_counts_by_free_cell_count(
+        &self,
+    ) -> [[u64; CLOSED_FORM_CELL_COUNT]; CLOSED_FORM_CELL_COUNT] {
+        let untried_count = self.untried_count;
+        // Pairs of untried cells with a free neighbour of either.
+        let two_untried_one_free =
+            (untried_count - 1) * self.edge_count - self.untried_pairs_around_free();
+        // Two free neighbours of the untried cell, or a path.
+        let one_untried_two_free = self.free_pairs_around_untried + self.path_count;
         [
-            self.untried_count,
-            self.two_cell_extension_count(),
-            self.three_cell_extension_count(),
-            self.four_cell_extension_count(),
+            [untried_count, 0, 0, 0],
+            [choose_two(untried_count), self.edge_count, 0, 0],
+            [
+                choose_three(untried_count),
+                two_untried_one_free,
+                one_untried_two_free,
+                0,
+            ],
+            [
+                choose_four(untried_count),
+                self.three_untried_one_free_count(),
+                self.two_untried_two_free_count(),
+                self.one_untried_three_free_count(),
+            ],
         ]
-        .map(|extension_count| {
-            u64::try_from(extension_count).expect("extension counts are never negative")
+        .map(|counts| {
+            counts.map(|extension_count| {
+                u64::try_from(extension_count).expect("extension counts are never negative")
+            })
         })
     }
 
     fn untried_pairs_around_free(&self) -> i64 {
         self.twice_untried_pairs_around_free / 2
-    }
-
-    fn two_cell_extension_count(&self) -> i64 {
-        choose_two(self.untried_count) + self.edge_count
-    }
-
-    fn three_cell_extension_count(&self) -> i64 {
-        let all_untried = choose_three(self.untried_count);
-        // Pairs of untried cells with a free neighbour of either.
-        let two_untried =
-            (self.untried_count - 1) * self.edge_count - self.untried_pairs_around_free();
-        // Two free neighbours of the untried cell, or a path.
-        let one_untried = self.free_pairs_around_untried + self.path_count;
-        all_untried + two_untried + one_untried
-    }
-
-    fn four_cell_extension_count(&self) -> i64 {
-        choose_four(self.untried_count)
-            + self.three_untried_one_free_count()
-            + self.two_untried_two_free_count()
-            + self.one_untried_three_free_count()
     }
 
     /// Triples of untried cells hitting the untried neighbours of a free
