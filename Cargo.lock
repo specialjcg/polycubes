@@ -2318,6 +2318,7 @@ dependencies = [
 name = "polycubes-app"
 version = "0.1.0"
 dependencies = [
+ "polycubes-automaton",
  "polycubes-core",
  "polycubes-sampling",
  "rand",

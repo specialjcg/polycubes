@@ -3,6 +3,7 @@
 //! No rule lives here: commands parse their input, call the crates and
 //! serialise the result.
 
+pub mod automaton;
 pub mod closed_form;
 pub mod drawing;
 pub mod enumeration;
@@ -12,6 +13,7 @@ pub mod remarkable;
 
 use std::sync::Mutex;
 
+use automaton::{AutomatonRun, CensusReport, RulePreset, SeedKind};
 use closed_form::ClosedFormComparison;
 use drawing::{CellCount, DrawnPolycube, PolycubeDrawer};
 use enumeration::TracedStep;
@@ -98,6 +100,49 @@ fn find_remarkable(cell_count: usize) -> Result<RemarkablePolycubes, String> {
     remarkable::find_remarkable(cell_count).map_err(|error| error.to_string())
 }
 
+/// Picks a seed of `cell_count` cells and runs the automaton from it.
+#[tauri::command(async)]
+fn run_automaton(
+    cell_count: usize,
+    seed_kind: SeedKind,
+    rule: RulePreset,
+    drawer: tauri::State<'_, Mutex<PolycubeDrawer>>,
+) -> Result<AutomatonRun, String> {
+    automaton::check_seed_cell_count(cell_count).map_err(|error| error.to_string())?;
+    let seed = match seed_kind {
+        SeedKind::Uniform => {
+            let cell_count = CellCount::try_from(cell_count).map_err(|error| error.to_string())?;
+            let mut drawer = drawer
+                .lock()
+                .map_err(|_| "a previous draw failed, restart the application".to_owned())?;
+            drawer
+                .draw(cell_count, |polycube_count| {
+                    rand::random_range(0..polycube_count)
+                })
+                .map_err(|error| error.to_string())?
+                .cells
+        }
+        SeedKind::Growth => {
+            polycubes_sampling::grow_by_random_neighbour(cell_count, |candidate_count| {
+                rand::random_range(0..candidate_count)
+            })
+        }
+        SeedKind::MostLooped => polycubes_sampling::most_looped_polycubes(cell_count)
+            .shapes
+            .into_iter()
+            .next()
+            .map(|shape| shape.cells)
+            .ok_or_else(|| "no polycube of that size".to_owned())?,
+    };
+    Ok(automaton::run_automaton(&seed, rule))
+}
+
+/// Runs the automaton from every fixed polycube of `cell_count` cells.
+#[tauri::command(async)]
+fn census_automaton(cell_count: usize, rule: RulePreset) -> Result<CensusReport, String> {
+    automaton::take_census(cell_count, rule).map_err(|error| error.to_string())
+}
+
 /// Runs the desktop application until its window is closed.
 ///
 /// # Panics
@@ -112,7 +157,9 @@ pub fn run() {
             trace_enumeration,
             compare_closed_form,
             build_gallery,
-            find_remarkable
+            find_remarkable,
+            run_automaton,
+            census_automaton
         ])
         .run(tauri::generate_context!())
         .expect("the desktop application failed to start");
