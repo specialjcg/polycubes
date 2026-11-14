@@ -1,6 +1,8 @@
 //! Polycubes that grow generation after generation, for the frontend.
 
-use polycubes_automaton::{Limits, Neighbourhood, Rule, evolve, grow_by_budding, grow_colony};
+use polycubes_automaton::{
+    Limits, Neighbourhood, Rule, evolve, grow_by_budding, grow_by_mutating_buds, grow_colony,
+};
 use polycubes_core::Coordinates;
 use serde::{Deserialize, Serialize};
 
@@ -64,16 +66,21 @@ pub enum GrowthMode {
     Colony,
     /// Whole polycubes bud turned copies of themselves against them.
     Budding,
+    /// Like budding, but each bud is its parent with one cell moved.
+    Mutation,
 }
 
 /// The generations of one seed, the seed first, and the box holding them
-/// all, so that the view may be framed once.
+/// all, so that the view may be framed once. `parent_of_copy` is filled
+/// when the generations list polycubes that bore one another: the birth
+/// rank of the parent of each, the seed being its own.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomatonRun {
     pub generations: Vec<Vec<Coordinates>>,
     pub lowest_corner: Coordinates,
     pub highest_corner: Coordinates,
+    pub parent_of_copy: Vec<usize>,
 }
 
 impl AutomatonRun {
@@ -84,6 +91,7 @@ impl AutomatonRun {
             lowest_corner: [0, 1, 2].map(|axis| coordinates_along(axis).min().unwrap_or(0)),
             highest_corner: [0, 1, 2].map(|axis| coordinates_along(axis).max().unwrap_or(0)),
             generations,
+            parent_of_copy: Vec::new(),
         }
     }
 }
@@ -159,6 +167,27 @@ pub fn bud(
     ))
 }
 
+/// Grows a colony of polycubes where each bud is its parent with one cell
+/// moved; `buds` and `choose` stand for the random choices of each.
+#[must_use]
+pub fn bud_mutants(
+    seed: &[Coordinates],
+    buds: impl FnMut() -> bool,
+    choose: impl FnMut(usize) -> usize,
+) -> AutomatonRun {
+    let lineage = grow_by_mutating_buds(
+        seed,
+        BUDDING_GENERATION_COUNT,
+        COLONY_POPULATION_LIMIT,
+        buds,
+        choose,
+    );
+    AutomatonRun {
+        parent_of_copy: lineage.parent_of_copy,
+        ..AutomatonRun::of(lineage.generations)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -210,6 +239,15 @@ mod tests {
             run.generations.last().map(Vec::len),
             Some(COLONY_POPULATION_LIMIT / SEED.len() * SEED.len())
         );
+    }
+
+    #[test]
+    fn mutant_buds_come_with_their_parents() {
+        let run = bud_mutants(&SEED, || true, |_| 0);
+
+        let last_copy_count = run.generations.last().map_or(0, Vec::len) / SEED.len();
+        assert!(last_copy_count > 1);
+        assert_eq!(run.parent_of_copy.len(), last_copy_count);
     }
 
     #[test]

@@ -8,7 +8,8 @@
 // still while the polycube changes. `framed="[[x,y,z],[x,y,z]]"` frames the
 // box between two opposite corner cells instead, for cells that spread far.
 // `copy-size="n"` tells that the cells list copies of one polycube, n cells
-// each: every copy then gets its own colour. `age-span="n"` tells that the
+// each: every copy then gets its own colour, or with `copy-parents="[...]"`,
+// the birth rank of the parent of each copy, a colour close to its parent's. `age-span="n"` tells that the
 // cells come in birth order, n at most: they run through the rainbow, the
 // eldest red, the youngest violet. `distance-coloured` colours each cell by
 // how far it stands from the centre of the `framed` box instead.
@@ -35,6 +36,9 @@ const COPY_LIGHTNESS = 0.58;
 // The rainbow stops at violet: going round to red again would give the
 // youngest cells the colour of the eldest.
 const YOUNGEST_HUE = 0.78;
+// Farthest a child's hue may stand from its parent's, as a share of the
+// colour wheel, when copies are coloured along their lineages.
+const LARGEST_HUE_DRIFT = 0.28;
 // Share of the room of all polycubes that the camera frames: most polycubes
 // stay near the first cell, so framing the whole room would shrink them;
 // only the straightest ones graze the border.
@@ -60,6 +64,7 @@ class PolycubeScene extends HTMLElement {
     "copy-size",
     "age-span",
     "distance-coloured",
+    "copy-parents",
   ];
 
   connectedCallback() {
@@ -155,13 +160,15 @@ class PolycubeScene extends HTMLElement {
     const copySize = Number(this.getAttribute("copy-size") ?? 0);
     const ageSpan = Number(this.getAttribute("age-span") ?? 0);
     const distanceFrame = this.hasAttribute("distance-coloured") ? this.framedBox() : null;
-    const colouringName = `${copySize} ${ageSpan} ${distanceFrame !== null}`;
+    const hueOfCopy = huesAlongLineages(JSON.parse(this.getAttribute("copy-parents") ?? "[]"));
+    const colouringName = `${copySize} ${ageSpan} ${distanceFrame !== null} ${hueOfCopy.length > 0}`;
     const colourOf = (placementIndex, cell) => {
       if (distanceFrame !== null) {
         return colourOfDistance(cell, distanceFrame);
       }
       if (copySize > 0) {
-        return colourOfCopy(Math.floor(placementIndex / copySize));
+        const copyIndex = Math.floor(placementIndex / copySize);
+        return colourOfHue(hueOfCopy[copyIndex] ?? copyIndex * COPY_HUE_STEP);
       }
       if (ageSpan > 0) {
         return colourOfAge(placementIndex / ageSpan);
@@ -311,12 +318,20 @@ function colourOfDistance([x, y, z], box) {
   return colourOfAge(Math.min(distance / reach, 1));
 }
 
-function colourOfCopy(copyIndex) {
-  return new THREE.Color().setHSL(
-    (copyIndex * COPY_HUE_STEP) % 1,
-    COPY_SATURATION,
-    COPY_LIGHTNESS,
-  );
+function colourOfHue(hue) {
+  return new THREE.Color().setHSL(((hue % 1) + 1) % 1, COPY_SATURATION, COPY_LIGHTNESS);
+}
+
+// Hue of each copy from the birth rank of its parent: a child takes the hue
+// of its parent, shifted a little one way or the other, so that a branch
+// keeps a family likeness while far cousins differ.
+function huesAlongLineages(parentOfCopy) {
+  const hueOfCopy = [];
+  parentOfCopy.forEach((parentIndex, copyIndex) => {
+    const shift = ((copyIndex * COPY_HUE_STEP) % 1) - 0.5;
+    hueOfCopy.push(copyIndex === 0 ? 0 : hueOfCopy[parentIndex] + shift * LARGEST_HUE_DRIFT);
+  });
+  return hueOfCopy;
 }
 
 function buildPlacedCube(cell, placementIndex, colour) {

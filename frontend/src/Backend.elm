@@ -156,12 +156,15 @@ type alias RemarkableShape =
 
 
 {-| The generations of a polycube that grows, the seed first, and two
-opposite corners of the box holding them all.
+opposite corners of the box holding them all. `parentOfCopy` is filled when
+the generations list polycubes that bore one another: the birth rank of the
+parent of each.
 -}
 type alias AutomatonRun =
     { generations : List (List Cell)
     , lowestCorner : Cell
     , highestCorner : Cell
+    , parentOfCopy : List Int
     }
 
 
@@ -390,7 +393,8 @@ automatonRunFinished toMsg =
 
 automatonRunDecoder : Decoder AutomatonRun
 automatonRunDecoder =
-    Decode.map3 AutomatonRun
+    Decode.map4 AutomatonRun
         (Decode.field "generations" (Decode.list cellsDecoder))
         (Decode.field "lowestCorner" Polycube.cellDecoder)
         (Decode.field "highestCorner" Polycube.cellDecoder)
+        (Decode.field "parentOfCopy" (Decode.list Decode.int))

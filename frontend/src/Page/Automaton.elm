@@ -1,6 +1,7 @@
 module Page.Automaton exposing (Model, Msg, init, start, subscriptions, update, view)
 
-{-| A polycube that grows generation after generation, in one of four ways.
+{-| A polycube that grows generation after generation, in one of five ways.
+By mutation, it bears buds that are itself with one cell moved.
 By budding, it bears turned copies of itself against it, which bud in turn.
 As a replicator, under Fredkin's parity rule, it comes back as six copies of
 itself at each power of two. As a colony, its cells divide at random into
@@ -47,7 +48,8 @@ type SeedKind
 
 
 type Mode
-    = Budding
+    = Mutation
+    | Budding
     | Replicator
     | EdgeReplicator
     | Colony
@@ -84,7 +86,7 @@ init : Model
 init =
     { cellCount = initialCellCount
     , seedKind = Uniform
-    , mode = Budding
+    , mode = Mutation
     , run = Running
     , isPlaying = True
     }
@@ -128,6 +130,9 @@ seedKindName seedKind =
 modeName : Mode -> String
 modeName mode =
     case mode of
+        Mutation ->
+            "mutation"
+
         Budding ->
             "budding"
 
@@ -186,6 +191,9 @@ neither, their cells are coloured by where they stand.
 colouringOf : Mode -> Int -> AutomatonRun -> Scene.Colouring
 colouringOf mode seedCellCount run =
     case mode of
+        Mutation ->
+            Scene.ByLineage seedCellCount run.parentOfCopy
+
         Budding ->
             Scene.ByCopy seedCellCount
 
@@ -253,7 +261,7 @@ view model =
         , viewChoice "Croissance"
             ModeChosen
             model.mode
-            [ ( Budding, "Bourgeonnement" ), ( Replicator, "Réplicateur à 6" ), ( EdgeReplicator, "Réplicateur à 12" ), ( Colony, "Colonie" ) ]
+            [ ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ), ( Replicator, "Réplicateur à 6" ), ( EdgeReplicator, "Réplicateur à 12" ), ( Colony, "Colonie" ) ]
         , p [ Attr.class "explanation" ] [ text (explain model.mode) ]
         , viewRun model.run
         ]
@@ -262,6 +270,9 @@ view model =
 explain : Mode -> String
 explain mode =
     case mode of
+        Mutation ->
+            "À chaque génération, un polycube sur deux tente de bourgeonner : l'enfant est le parent avec un cube déplacé, tourné au hasard, et naît contre lui sans toucher aucun autre. Les formes dérivent le long des branches ; chaque enfant prend une couleur proche de celle de son parent."
+
         Budding ->
             "À chaque génération, un polycube sur deux tente de bourgeonner : une copie de lui-même, tournée au hasard mais jamais en miroir, naît contre lui là où la place est libre. Chaque copie a sa couleur et bourgeonne à son tour."
 
@@ -278,11 +289,19 @@ explain mode =
 describePopulation : Scene.Colouring -> Int -> String
 describePopulation colouring cellCount =
     case colouring of
+        Scene.ByLineage cellsPerCopy _ ->
+            describeCopies cellsPerCopy cellCount
+
         Scene.ByCopy cellsPerCopy ->
-            String.fromInt (cellCount // cellsPerCopy) ++ " polycubes, " ++ String.fromInt cellCount ++ " cellules"
+            describeCopies cellsPerCopy cellCount
 
         _ ->
             String.fromInt cellCount ++ " cellules"
+
+
+describeCopies : Int -> Int -> String
+describeCopies cellsPerCopy cellCount =
+    String.fromInt (cellCount // cellsPerCopy) ++ " polycubes, " ++ String.fromInt cellCount ++ " cellules"
 
 
 viewChoice : String -> (choice -> Msg) -> choice -> List ( choice, String ) -> Html Msg
