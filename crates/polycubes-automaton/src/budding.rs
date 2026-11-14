@@ -12,7 +12,7 @@ use crate::colony::face_neighbours;
 ///
 /// At each generation every copy buds when `buds` says so: a copy of the
 /// seed, turned any way but never mirrored, is born against it where no
-/// cell is taken. `choose_placement` picks it among the number of such
+/// cell is taken and where it touches no other copy. `choose_placement` picks it among the number of such
 /// places, and must answer an index below that number. A copy with no room
 /// around it no longer buds, and none is born that would bring the colony
 /// beyond `population_limit` cells.
@@ -76,7 +76,8 @@ fn orientations(seed: &[Coordinates]) -> Vec<Vec<Coordinates>> {
     orientations
 }
 
-/// Copies that touch `parent` and overlap nothing, each set of cells once,
+/// Copies that touch `parent`, overlap nothing and touch no other copy, each
+/// set of cells once,
 /// in an order that depends on the cells alone.
 fn free_placements(
     parent: &[Coordinates],
@@ -95,7 +96,7 @@ fn free_placements(
         for &anchor in orientation {
             for &landing in &landings {
                 let placement = moved_onto(orientation, anchor, landing);
-                if placement.iter().any(|cell| occupied.contains(cell)) {
+                if !has_room(&placement, parent, occupied) {
                     continue;
                 }
                 let mut sorted_cells = placement.clone();
@@ -105,6 +106,21 @@ fn free_placements(
         }
     }
     placement_by_cells.into_values().collect()
+}
+
+/// Whether `placement` overlaps nothing and leans on no copy but `parent`:
+/// buds that pack against every neighbour would hide the copies in a lump.
+fn has_room(
+    placement: &[Coordinates],
+    parent: &[Coordinates],
+    occupied: &HashSet<Coordinates>,
+) -> bool {
+    placement.iter().all(|&cell| {
+        !occupied.contains(&cell)
+            && face_neighbours(cell)
+                .iter()
+                .all(|neighbour| !occupied.contains(neighbour) || parent.contains(neighbour))
+    })
 }
 
 /// `cells` shifted so that its cell `anchor` lands on `landing`.

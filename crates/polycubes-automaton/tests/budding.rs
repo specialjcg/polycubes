@@ -93,3 +93,31 @@ fn no_copy_is_born_beyond_the_population_limit() {
     // Seven screws hold 28 cells; an eighth would exceed 30.
     assert_eq!(generations.last().map(Vec::len), Some(28));
 }
+
+#[test]
+fn a_bud_touches_no_copy_but_its_parent() {
+    let mut choice_index = 0;
+    let generations = grow_by_budding(
+        &SCREW,
+        6,
+        POPULATION_LIMIT,
+        || true,
+        |placement_count| {
+            choice_index += 5;
+            choice_index % placement_count
+        },
+    );
+
+    let colony = generations.last().expect("the seed at least");
+    let copies = copies_of(colony);
+    for (copy_index, copy) in copies.iter().enumerate().skip(1) {
+        let touched_elders = copies[..copy_index]
+            .iter()
+            .filter(|elder| {
+                copy.iter()
+                    .any(|&cell| elder.iter().any(|&elder_cell| touch(cell, elder_cell)))
+            })
+            .count();
+        assert_eq!(touched_elders, 1, "copy {copy_index} leans on several");
+    }
+}
