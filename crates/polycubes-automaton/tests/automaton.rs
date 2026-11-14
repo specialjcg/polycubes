@@ -175,3 +175,36 @@ fn the_parity_rule_copies_a_polycube_six_times_at_each_power_of_two() {
     assert_eq!(evolution.generations[4], six_copies(&seed, 4));
     assert_eq!(evolution.generations[8], six_copies(&seed, 8));
 }
+
+fn twelve_copies(seed: &[Coordinates], distance: i32) -> Vec<Coordinates> {
+    let mut copies = Vec::new();
+    for still_axis in 0..3 {
+        for first_direction in [-1, 1] {
+            for second_direction in [-1, 1] {
+                for cell in seed {
+                    let mut moved = *cell;
+                    moved[(still_axis + 1) % 3] += first_direction * distance;
+                    moved[(still_axis + 2) % 3] += second_direction * distance;
+                    copies.push(moved);
+                }
+            }
+        }
+    }
+    copies.sort_unstable();
+    copies
+}
+
+#[test]
+fn the_parity_rule_over_edges_copies_a_polycube_twelve_times() {
+    let seed = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [1, 1, 1]];
+    let odd_counts = [1, 3, 5, 7, 9, 11];
+    let edge_parity_rule = rule(Neighbourhood::Edges, &odd_counts, &odd_counts);
+    let limits = Limits {
+        generation_count: 4,
+        population: 10_000,
+    };
+
+    let evolution = evolve(&seed, &edge_parity_rule, limits);
+
+    assert_eq!(evolution.generations[4], twelve_copies(&seed, 4));
+}

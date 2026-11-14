@@ -5,6 +5,8 @@
 pub enum Neighbourhood {
     /// The 6 cells sharing a face: the contacts of a polycube.
     Faces,
+    /// The 12 cells sharing an edge only.
+    Edges,
     /// The 26 cells sharing a face, an edge or a corner.
     FacesEdgesCorners,
 }
@@ -14,6 +16,7 @@ impl Neighbourhood {
     pub fn neighbour_count(self) -> usize {
         match self {
             Self::Faces => 6,
+            Self::Edges => 12,
             Self::FacesEdgesCorners => 26,
         }
     }
@@ -100,6 +103,7 @@ impl Neighbourhood {
                     let changed_axis_count = [x, y, z].iter().filter(|&&step| step != 0).count();
                     let is_neighbour = match self {
                         Self::Faces => changed_axis_count == 1,
+                        Self::Edges => changed_axis_count == 2,
                         Self::FacesEdgesCorners => changed_axis_count >= 1,
                     };
                     if is_neighbour {
