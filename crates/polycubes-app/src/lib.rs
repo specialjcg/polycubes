@@ -143,37 +143,14 @@ fn run_automaton(
     drawer: tauri::State<'_, Mutex<PolycubeDrawer>>,
 ) -> Result<AutomatonRun, String> {
     automaton::check_seed_cell_count(cell_count).map_err(|error| error.to_string())?;
-    if mode == GrowthMode::Life {
-        let polycubes = (0..automaton::soup_polycube_count(cell_count))
-            .map(|_| pick_seed(cell_count, seed_kind, &drawer))
-            .collect::<Result<Vec<_>, _>>()?;
-        return Ok(automaton::live(&polycubes, |shift_count| {
-            rand::random_range(0..shift_count)
-        }));
-    }
     let seed = pick_seed(cell_count, seed_kind, &drawer)?;
+    let choose = |choice_count| rand::random_range(0..choice_count);
+    let buds = || rand::random_bool(automaton::BUDDING_CHANCE);
     Ok(match mode {
-        GrowthMode::Life => automaton::live(&[seed], |_| 0),
-        GrowthMode::Aggregation => automaton::aggregate_wanderers(&seed, |choice_count| {
-            rand::random_range(0..choice_count)
-        }),
-        GrowthMode::Replicator => automaton::replicate(&seed),
-        GrowthMode::EdgeReplicator => automaton::replicate_over_edges(&seed),
-        GrowthMode::Colony => automaton::grow(
-            &seed,
-            || rand::random_bool(automaton::COLONY_DIVISION_CHANCE),
-            |free_neighbour_count| rand::random_range(0..free_neighbour_count),
-        ),
-        GrowthMode::Mutation => automaton::bud_mutants(
-            &seed,
-            || rand::random_bool(automaton::BUDDING_CHANCE),
-            |choice_count| rand::random_range(0..choice_count),
-        ),
-        GrowthMode::Budding => automaton::bud(
-            &seed,
-            || rand::random_bool(automaton::BUDDING_CHANCE),
-            |placement_count| rand::random_range(0..placement_count),
-        ),
+        GrowthMode::Aggregation => automaton::aggregate_wanderers(&seed, choose),
+        GrowthMode::Mutation => automaton::bud_mutants(&seed, buds, choose),
+        GrowthMode::Budding => automaton::bud(&seed, buds, choose),
+        GrowthMode::Life => automaton::live(&seed, buds, choose),
     })
 }
 

@@ -49,16 +49,16 @@ viewAmongNeighbours neighbours polycube =
 {-| How the cells of a framed view are coloured. `ByCopy n` : the cells list
 copies of one polycube, `n` cells each, and every copy gets its own colour.
 `ByLineage n parents` : copies again, but each takes after the colour of its
-parent, whose birth rank `parents` gives. `ByAge n` : the cells come in birth order, `n` at most, and run through the
-rainbow. `ByDistance` : the rainbow again, from the centre of the frame
-outwards. `ByPlacement` : shades of one colour, darker for the first cells.
+parent, whose birth rank `parents` gives. `ByIdentity n identities` : copies
+again, each coloured after its identity, so that it keeps its colour while
+others come and go. `ByAge n` : the cells come in birth order, `n` at most,
+and run through the rainbow.
 -}
 type Colouring
-    = ByPlacement
-    | ByCopy Int
+    = ByCopy Int
     | ByLineage Int (List Int)
+    | ByIdentity Int (List Int)
     | ByAge Int
-    | ByDistance
 
 
 {-| Shows cells in a view framed once on the box between two opposite
@@ -77,22 +77,27 @@ viewColouredFramed colouring frame cells =
 colouringAttributes : Colouring -> List (Html.Attribute msg)
 colouringAttributes colouring =
     case colouring of
-        ByPlacement ->
-            []
-
         ByCopy cellsPerCopy ->
-            [ Attr.attribute "copy-size" (String.fromInt cellsPerCopy) ]
+            [ copySizeAttribute cellsPerCopy ]
 
         ByLineage cellsPerCopy parentOfCopy ->
-            [ Attr.attribute "copy-size" (String.fromInt cellsPerCopy)
-            , Attr.attribute "copy-parents" (Encode.encode 0 (Encode.list Encode.int parentOfCopy))
-            ]
+            [ copySizeAttribute cellsPerCopy, encodedIntsAttribute "copy-parents" parentOfCopy ]
+
+        ByIdentity cellsPerCopy identities ->
+            [ copySizeAttribute cellsPerCopy, encodedIntsAttribute "copy-ids" identities ]
 
         ByAge largestCellCount ->
             [ Attr.attribute "age-span" (String.fromInt largestCellCount) ]
 
-        ByDistance ->
-            [ Attr.attribute "distance-coloured" "" ]
+
+copySizeAttribute : Int -> Html.Attribute msg
+copySizeAttribute cellsPerCopy =
+    Attr.attribute "copy-size" (String.fromInt cellsPerCopy)
+
+
+encodedIntsAttribute : String -> List Int -> Html.Attribute msg
+encodedIntsAttribute name ints =
+    Attr.attribute name (Encode.encode 0 (Encode.list Encode.int ints))
 
 
 cellsAttribute : Polycube -> Html.Attribute msg

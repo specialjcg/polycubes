@@ -1,12 +1,10 @@
 module Page.Automaton exposing (Model, Msg, init, start, subscriptions, update, view)
 
-{-| A polycube that grows generation after generation, in one of seven ways.
+{-| A polycube that grows generation after generation, in one of four ways.
 By aggregation, copies of it wander in from afar and stick where they touch.
-By mutation, it bears buds that are itself with one cell moved.
-By budding, it bears turned copies of itself against it, which bud in turn.
-As a replicator, under Fredkin's parity rule, it comes back as six copies of
-itself at each power of two. As a colony, its cells divide at random into
-the free cells beside them.
+By mutation, it bears buds that are itself with one cell moved. By budding,
+it bears turned copies of itself against it, which bud in turn. As a game of
+life, whole polycubes die of crowding while others are born beside them.
 -}
 
 import Backend exposing (AutomatonRun)
@@ -50,12 +48,9 @@ type SeedKind
 
 type Mode
     = Aggregation
+    | Life
     | Mutation
     | Budding
-    | Life
-    | Replicator
-    | EdgeReplicator
-    | Colony
 
 
 type alias Model =
@@ -68,11 +63,21 @@ type alias Model =
 
 
 {-| `elapsedGenerations` runs past the last generation while it is held.
+`mode` and `seedCellCount` are those the run was asked with, which tell how
+its cells are to be coloured.
 -}
 type Run
     = Running
-    | Ran { run : AutomatonRun, elapsedGenerations : Int, colouring : Scene.Colouring }
+    | Ran Played
     | Failed String
+
+
+type alias Played =
+    { run : AutomatonRun
+    , elapsedGenerations : Int
+    , mode : Mode
+    , seedCellCount : Int
+    }
 
 
 type Msg
@@ -136,23 +141,14 @@ modeName mode =
         Aggregation ->
             "aggregation"
 
+        Life ->
+            "life"
+
         Mutation ->
             "mutation"
 
         Budding ->
             "budding"
-
-        Life ->
-            "life"
-
-        Replicator ->
-            "replicator"
-
-        EdgeReplicator ->
-            "edgeReplicator"
-
-        Colony ->
-            "colony"
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -180,7 +176,8 @@ update msg model =
                     Ran
                         { run = run
                         , elapsedGenerations = 0
-                        , colouring = colouringOf model.mode model.cellCount run
+                        , mode = model.mode
+                        , seedCellCount = model.cellCount
                         }
               }
             , Cmd.none
@@ -191,35 +188,6 @@ update msg model =
 
         GenerationInterval ->
             ( { model | run = letAGenerationPass model.run }, Cmd.none )
-
-
-{-| Budding keeps the seed whole, one colour per copy. A colony lists its
-cells in birth order, so they are coloured by age. The replicators have
-neither, their cells are coloured by where they stand.
--}
-colouringOf : Mode -> Int -> AutomatonRun -> Scene.Colouring
-colouringOf mode seedCellCount run =
-    case mode of
-        Mutation ->
-            Scene.ByLineage seedCellCount run.parentOfCopy
-
-        Budding ->
-            Scene.ByCopy seedCellCount
-
-        Aggregation ->
-            Scene.ByAge (List.map List.length run.generations |> List.maximum |> Maybe.withDefault 1)
-
-        Colony ->
-            Scene.ByAge (List.map List.length run.generations |> List.maximum |> Maybe.withDefault 1)
-
-        Life ->
-            Scene.ByDistance
-
-        Replicator ->
-            Scene.ByDistance
-
-        EdgeReplicator ->
-            Scene.ByDistance
 
 
 {-| The run plays in a loop: after the last generation has been held, the
@@ -276,7 +244,7 @@ view model =
         , viewChoice "Croissance"
             ModeChosen
             model.mode
-            [ ( Aggregation, "Agrégation" ), ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ), ( Life, "Vie" ), ( Replicator, "Réplicateur à 6" ), ( EdgeReplicator, "Réplicateur à 12" ), ( Colony, "Colonie" ) ]
+            [ ( Aggregation, "Agrégation" ), ( Life, "Vie" ), ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ) ]
         , p [ Attr.class "explanation" ] [ text (explain model.mode) ]
         , viewRun model.run
         ]
@@ -288,41 +256,14 @@ explain mode =
         Aggregation ->
             "Comme le givre ou le corail : des copies du polycube, tournées au hasard, arrivent de loin en errant case par case et se collent là où elles touchent l'amas pour la première fois. Les pointes attrapent les arrivants avant les creux, d'où les branches. Les couleurs suivent l'ordre d'arrivée : rouge pour les premiers, violet pour les derniers."
 
+        Life ->
+            "Un jeu de la vie dont la cellule est un polycube entier. À chaque génération, tous en même temps : un polycube meurt si plus de deux autres le touchent ; un polycube sur deux fait naître une copie tournée de lui-même, là où elle touchera un ou deux vivants. Chaque polycube garde sa forme et sa couleur de sa naissance à sa mort. Le monde est un cube de 11 cases de côté."
+
         Mutation ->
             "À chaque génération, un polycube sur deux tente de bourgeonner : l'enfant est le parent avec un cube déplacé, tourné au hasard, et naît contre lui sans toucher aucun autre. Les formes dérivent le long des branches ; chaque enfant prend une couleur proche de celle de son parent."
 
         Budding ->
             "À chaque génération, un polycube sur deux tente de bourgeonner : une copie de lui-même, tournée au hasard mais jamais en miroir, naît contre lui là où la place est libre. Chaque copie a sa couleur et bourgeonne à son tour."
-
-        Life ->
-            "Règle de la famille du jeu de la vie, sur les 26 voisines : une cellule survit avec 3 à 6 voisines vivantes, une case vide naît avec exactement 5. Aucun hasard dans la règle ; le départ est une soupe d'une vingtaine de cubes, faite de plusieurs polycubes jetés ensemble. Les couleurs suivent la distance au centre."
-
-        Replicator ->
-            "Règle de parité de Fredkin : une case vit si un nombre impair de ses six voisines vivent. Quelle que soit la graine, elle réapparaît en six exemplaires aux générations 1, 2, 4 et 8, de plus en plus écartés. Les couleurs suivent la distance au centre."
-
-        EdgeReplicator ->
-            "La même règle de parité, mais sur les douze voisines par arête : la graine réapparaît en douze exemplaires aux générations 1, 2 et 4, vers le milieu des arêtes d'un cube. Les couleurs suivent la distance au centre."
-
-        Colony ->
-            "À chaque génération, chaque cellule se divise avec 4 chances sur 10, vers une case libre voisine qui ne touche aucune autre cellule : la colonie pousse en branches, sans jamais se refermer en boucle. Les couleurs suivent l'âge : les cellules les plus anciennes sont rouges, les plus jeunes violettes."
-
-
-describePopulation : Scene.Colouring -> Int -> String
-describePopulation colouring cellCount =
-    case colouring of
-        Scene.ByLineage cellsPerCopy _ ->
-            describeCopies cellsPerCopy cellCount
-
-        Scene.ByCopy cellsPerCopy ->
-            describeCopies cellsPerCopy cellCount
-
-        _ ->
-            String.fromInt cellCount ++ " cellules"
-
-
-describeCopies : Int -> Int -> String
-describeCopies cellsPerCopy cellCount =
-    String.fromInt (cellCount // cellsPerCopy) ++ " polycubes, " ++ String.fromInt cellCount ++ " cellules"
 
 
 viewChoice : String -> (choice -> Msg) -> choice -> List ( choice, String ) -> Html Msg
@@ -353,16 +294,14 @@ viewRun run =
                     min played.elapsedGenerations lastGeneration
 
                 living =
-                    List.drop shownGeneration played.run.generations
-                        |> List.head
-                        |> Maybe.withDefault []
+                    at shownGeneration played.run.generations
 
                 frame =
                     { lowestCorner = played.run.lowestCorner, highestCorner = played.run.highestCorner }
             in
             div []
                 [ div [ Attr.class "automaton" ]
-                    [ Scene.viewColouredFramed played.colouring frame living ]
+                    [ Scene.viewColouredFramed (colouringOf played shownGeneration) frame living ]
                 , p [ Attr.class "status" ]
                     [ text
                         ("Génération "
@@ -370,10 +309,41 @@ viewRun run =
                             ++ " sur "
                             ++ String.fromInt lastGeneration
                             ++ " : "
-                            ++ describePopulation played.colouring (List.length living)
+                            ++ String.fromInt (List.length living // played.seedCellCount)
+                            ++ " polycubes, "
+                            ++ String.fromInt (List.length living)
+                            ++ " cellules"
                         )
                     ]
                 ]
 
         Failed reason ->
             p [ Attr.class "status error" ] [ text ("Croissance impossible : " ++ reason) ]
+
+
+{-| The list at `index`, empty when there is none.
+-}
+at : Int -> List (List element) -> List element
+at index lists =
+    List.drop index lists |> List.head |> Maybe.withDefault []
+
+
+{-| An aggregate lists its cells in the order they came, so they are
+coloured by age. Life tells its polycubes apart generation by generation, so
+that each keeps its colour while others die. Mutants take after their
+parent. Buds are all alike, one colour each.
+-}
+colouringOf : Played -> Int -> Scene.Colouring
+colouringOf played shownGeneration =
+    case played.mode of
+        Aggregation ->
+            Scene.ByAge (List.map List.length played.run.generations |> List.maximum |> Maybe.withDefault 1)
+
+        Life ->
+            Scene.ByIdentity played.seedCellCount (at shownGeneration played.run.identitiesByGeneration)
+
+        Mutation ->
+            Scene.ByLineage played.seedCellCount played.run.parentOfCopy
+
+        Budding ->
+            Scene.ByCopy played.seedCellCount

@@ -11,8 +11,8 @@
 // each: every copy then gets its own colour, or with `copy-parents="[...]"`,
 // the birth rank of the parent of each copy, a colour close to its parent's. `age-span="n"` tells that the
 // cells come in birth order, n at most: they run through the rainbow, the
-// eldest red, the youngest violet. `distance-coloured` colours each cell by
-// how far it stands from the centre of the `framed` box instead.
+// eldest red, the youngest violet. `copy-ids="[...]"` gives what tells each copy
+// from all others: it keeps its cubes and its colour while others die.
 // The Elm application owns the state; this element only draws what its
 // attributes describe.
 import * as THREE from "three";
@@ -45,7 +45,7 @@ const LARGEST_HUE_DRIFT = 0.28;
 const FRAMED_ROOM_SHARE = 0.6;
 // Share of the sphere around a `framed` box that the camera frames: cells
 // seldom reach the corners of the box, so the whole sphere would shrink them.
-const FRAMED_BOX_SHARE = 0.7;
+const FRAMED_BOX_SHARE = 0.85;
 const FIELD_OF_VIEW_DEGREES = 40;
 const CAMERA_DIRECTION = new THREE.Vector3(1.2, 0.9, 1.6).normalize();
 const CAMERA_MARGIN = 1.15;
@@ -63,8 +63,8 @@ class PolycubeScene extends HTMLElement {
     "framed",
     "copy-size",
     "age-span",
-    "distance-coloured",
     "copy-parents",
+    "copy-ids",
   ];
 
   connectedCallback() {
@@ -141,10 +141,8 @@ class PolycubeScene extends HTMLElement {
     });
   }
 
-  // The box of the `framed` attribute, or null without it.
-  framedBox() {
-    const framedAttribute = this.getAttribute("framed");
-    return framedAttribute === null ? null : boxBetweenCells(JSON.parse(framedAttribute));
+  intsOf(attributeName) {
+    return JSON.parse(this.getAttribute(attributeName) ?? "[]");
   }
 
   cellsOf(attributeName) {
@@ -159,29 +157,34 @@ class PolycubeScene extends HTMLElement {
     const lastPlacementIndex = Math.max(extent - 1, 1);
     const copySize = Number(this.getAttribute("copy-size") ?? 0);
     const ageSpan = Number(this.getAttribute("age-span") ?? 0);
-    const distanceFrame = this.hasAttribute("distance-coloured") ? this.framedBox() : null;
-    const hueOfCopy = huesAlongLineages(JSON.parse(this.getAttribute("copy-parents") ?? "[]"));
-    const colouringName = `${copySize} ${ageSpan} ${distanceFrame !== null} ${hueOfCopy.length > 0}`;
-    const colourOf = (placementIndex, cell) => {
-      if (distanceFrame !== null) {
-        return colourOfDistance(cell, distanceFrame);
-      }
-      if (copySize > 0) {
-        const copyIndex = Math.floor(placementIndex / copySize);
-        return colourOfHue(hueOfCopy[copyIndex] ?? copyIndex * COPY_HUE_STEP);
-      }
-      if (ageSpan > 0) {
-        return colourOfAge(placementIndex / ageSpan);
-      }
-      return colourOfPlacement(placementIndex / lastPlacementIndex);
-    };
+    const hueOfCopy = huesAlongLineages(this.intsOf("copy-parents"));
+    const identityOfCopy = this.intsOf("copy-ids");
+    const colouringName = `${copySize} ${ageSpan} ${hueOfCopy.length > 0}`;
     const builderByKey = new Map();
     placedCells.forEach((cell, placementIndex) => {
+      const copyIndex = copySize > 0 ? Math.floor(placementIndex / copySize) : 0;
+      const identity = identityOfCopy[copyIndex];
+      const colourOf = () => {
+        if (identity !== undefined) {
+          return colourOfHue(identity * COPY_HUE_STEP);
+        }
+        if (copySize > 0) {
+          return colourOfHue(hueOfCopy[copyIndex] ?? copyIndex * COPY_HUE_STEP);
+        }
+        if (ageSpan > 0) {
+          return colourOfAge(placementIndex / ageSpan);
+        }
+        return colourOfPlacement(placementIndex / lastPlacementIndex);
+      };
       // The key names the colouring, not the colour: the brown shades drift
-      // as cells are added, and must not redraw the cubes already there.
-      builderByKey.set(`placed ${placementIndex} ${cell} ${colouringName}`, () =>
-        buildPlacedCube(cell, placementIndex, colourOf(placementIndex, cell)),
-      );
+      // as cells are added, and must not redraw the cubes already there. A
+      // copy with an identity is named by it and not by its rank, which
+      // shifts when a copy before it dies.
+      const key =
+        identity === undefined
+          ? `placed ${placementIndex} ${cell} ${colouringName}`
+          : `copy ${identity} ${cell}`;
+      builderByKey.set(key, () => buildPlacedCube(cell, placementIndex, colourOf()));
     });
     for (const cell of this.cellsOf("candidates")) {
       builderByKey.set(`candidate ${cell}`, () => buildCandidateCube(cell));
@@ -308,14 +311,6 @@ function colourOfPlacement(placementProgress) {
 // `age` runs from 0 (eldest cell) to 1 (youngest one there will be).
 function colourOfAge(age) {
   return new THREE.Color().setHSL(age * YOUNGEST_HUE, COPY_SATURATION, COPY_LIGHTNESS);
-}
-
-// Red at the centre of `box`, violet at the middle of its farthest faces.
-function colourOfDistance([x, y, z], box) {
-  const size = box.getSize(new THREE.Vector3());
-  const reach = Math.max(size.x, size.y, size.z) / 2;
-  const distance = box.getCenter(new THREE.Vector3()).distanceTo(new THREE.Vector3(x, z, -y));
-  return colourOfAge(Math.min(distance / reach, 1));
 }
 
 function colourOfHue(hue) {

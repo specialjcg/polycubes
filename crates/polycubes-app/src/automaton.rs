@@ -1,56 +1,24 @@
 //! Polycubes that grow generation after generation, for the frontend.
 
 use polycubes_automaton::{
-    Limits, Neighbourhood, Rule, aggregate, evolve, grow_by_budding, grow_by_mutating_buds,
-    grow_colony,
+    PolycubeLifeRule, PolycubeWorld, aggregate, grow_by_budding, grow_by_mutating_buds,
+    live_as_polycubes,
 };
 use polycubes_core::Coordinates;
 use serde::{Deserialize, Serialize};
 
-/// Largest seed: the replicator shows up to 216 copies of it at once, and
-/// the 3D view slows down beyond a thousand cells or so.
+/// Largest seed: the 3D view slows down beyond a thousand cells or so, and
+/// larger polycubes would leave too few of them to watch.
 pub const MAX_SEED_CELL_COUNT: usize = 6;
 
-/// The replicator shows its copies at generations 1, 2, 4 and 8; the next
-/// ones, at 16, would stand too far apart to be seen together.
-const REPLICATOR_LIMITS: Limits = Limits {
-    generation_count: 8,
-    population: 3000,
-};
-
-/// Over the 12 edge neighbours the copies show at generations 1, 2 and 4;
-/// generation 7 would hold 1728 of them.
-const EDGE_REPLICATOR_LIMITS: Limits = Limits {
-    generation_count: 4,
-    population: 3000,
-};
-
-/// Cells a soup aims at: a lone small polycube dies at once under the life
-/// rule, some twenty cells thrown together live on.
-const SOUP_CELL_COUNT: usize = 24;
-
-/// Side of the cube the polycubes of a soup are shifted within: close
-/// enough for them to meet.
-const SOUP_SIDE: usize = 3;
-
-const LIFE_LIMITS: Limits = Limits {
-    generation_count: 32,
-    population: 2000,
-};
+/// Cells drawn at most: beyond, the 3D view slows down.
+const POPULATION_LIMIT: usize = 1000;
 
 /// Cells an aggregate aims at, whatever the size of its polycubes.
 const AGGREGATE_CELL_COUNT: usize = 600;
 
 /// Generations the arrivals of an aggregate are spread over.
 const AGGREGATE_GENERATION_COUNT: usize = 24;
-
-const COLONY_GENERATION_COUNT: usize = 24;
-
-/// Cells drawn at most: beyond, the 3D view slows down.
-const COLONY_POPULATION_LIMIT: usize = 1000;
-
-/// Share of the cells with room beside them that divide at each generation.
-pub const COLONY_DIVISION_CHANCE: f64 = 0.4;
 
 const BUDDING_GENERATION_COUNT: usize = 16;
 
@@ -60,6 +28,21 @@ const MUTATION_POLYCUBE_LIMIT: usize = 60;
 
 /// Share of the polycubes that try to bud at each generation.
 pub const BUDDING_CHANCE: f64 = 0.5;
+
+/// Measured on seeds of five cells, against seven other settings: this one
+/// had the most deaths, some 200 over 30 generations.
+const LIFE_RULE: PolycubeLifeRule = PolycubeLifeRule {
+    most_neighbours_to_survive: 2,
+    fewest_neighbours_to_be_born: 1,
+    most_neighbours_to_be_born: 2,
+};
+
+/// The world is a cube of 11 cells a side around the seed: births go on
+/// wherever room is left in it, so the game never freezes.
+const LIFE_WORLD: PolycubeWorld = PolycubeWorld {
+    generation_count: 30,
+    reach: 5,
+};
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum AutomatonError {
@@ -80,29 +63,24 @@ pub enum SeedKind {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum GrowthMode {
-    /// Fredkin's parity rule: a cell lives when an odd number of its six
-    /// face neighbours do. Any seed comes back as six copies of itself at
-    /// each power of two.
-    Replicator,
-    /// The same parity rule over the twelve edge neighbours: twelve copies.
-    EdgeReplicator,
-    /// Cells divide at random into the free cells beside them.
-    Colony,
-    /// Whole polycubes bud turned copies of themselves against them.
-    Budding,
     /// Polycubes wander in from afar and stick where they first touch.
     Aggregation,
-    /// A rule of the family of Conway's game of life, over the 26
-    /// neighbours, started from several polycubes thrown together.
-    Life,
     /// Like budding, but each bud is its parent with one cell moved.
     Mutation,
+    /// Whole polycubes bud turned copies of themselves against them.
+    Budding,
+    /// A game of life whose living unit is a whole polycube.
+    Life,
 }
 
 /// The generations of one seed, the seed first, and the box holding them
-/// all, so that the view may be framed once. `parent_of_copy` is filled
-/// when the generations list polycubes that bore one another: the birth
-/// rank of the parent of each, the seed being its own.
+/// all, so that the view may be framed once. A generation lists polycubes
+/// one after the other, each as many cells as the seed.
+///
+/// `parent_of_copy` is filled when the polycubes bore one another: the
+/// birth rank of the parent of each, the seed being its own.
+/// `identities_by_generation` is filled when polycubes die: for each
+/// generation, what tells each of its polycubes from all others.
 #[derive(Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AutomatonRun {
@@ -110,6 +88,7 @@ pub struct AutomatonRun {
     pub lowest_corner: Coordinates,
     pub highest_corner: Coordinates,
     pub parent_of_copy: Vec<usize>,
+    pub identities_by_generation: Vec<Vec<usize>>,
 }
 
 impl AutomatonRun {
@@ -121,6 +100,7 @@ impl AutomatonRun {
             highest_corner: [0, 1, 2].map(|axis| coordinates_along(axis).max().unwrap_or(0)),
             generations,
             parent_of_copy: Vec::new(),
+            identities_by_generation: Vec::new(),
         }
     }
 }
@@ -138,49 +118,8 @@ pub fn check_seed_cell_count(cell_count: usize) -> Result<(), AutomatonError> {
     Ok(())
 }
 
-/// Runs the parity rule over the six face neighbours from `seed`.
-#[must_use]
-pub fn replicate(seed: &[Coordinates]) -> AutomatonRun {
-    run_parity_rule(seed, Neighbourhood::Faces, REPLICATOR_LIMITS)
-}
-
-/// Runs the parity rule over the twelve edge neighbours from `seed`.
-#[must_use]
-pub fn replicate_over_edges(seed: &[Coordinates]) -> AutomatonRun {
-    run_parity_rule(seed, Neighbourhood::Edges, EDGE_REPLICATOR_LIMITS)
-}
-
-fn run_parity_rule(
-    seed: &[Coordinates],
-    neighbourhood: Neighbourhood,
-    limits: Limits,
-) -> AutomatonRun {
-    let odd_counts: Vec<usize> = (1..=neighbourhood.neighbour_count()).step_by(2).collect();
-    let parity_rule = Rule::new(neighbourhood, &odd_counts, &odd_counts)
-        .expect("odd counts up to the number of neighbours fit it");
-    AutomatonRun::of(evolve(seed, &parity_rule, limits).generations)
-}
-
-/// Grows a colony from `seed`; `divides` and `choose_neighbour` stand for
-/// the random choices of each cell.
-#[must_use]
-pub fn grow(
-    seed: &[Coordinates],
-    divides: impl FnMut() -> bool,
-    choose_neighbour: impl FnMut(usize) -> usize,
-) -> AutomatonRun {
-    AutomatonRun::of(grow_colony(
-        seed,
-        COLONY_GENERATION_COUNT,
-        COLONY_POPULATION_LIMIT,
-        divides,
-        choose_neighbour,
-    ))
-}
-
 /// Grows a colony of copies of `seed`; `buds` and `choose_placement` stand
-/// for the random choices of each copy. A generation lists its copies one
-/// after the other, each as many cells as the seed.
+/// for the random choices of each copy.
 #[must_use]
 pub fn bud(
     seed: &[Coordinates],
@@ -190,7 +129,7 @@ pub fn bud(
     AutomatonRun::of(grow_by_budding(
         seed,
         BUDDING_GENERATION_COUNT,
-        COLONY_POPULATION_LIMIT,
+        POPULATION_LIMIT,
         buds,
         choose_placement,
     ))
@@ -238,46 +177,33 @@ pub fn aggregate_wanderers(
     AutomatonRun::of(generations)
 }
 
-/// Polycubes of `cell_count` cells a soup takes to hold about
-/// [`SOUP_CELL_COUNT`] cells.
-#[must_use]
-pub fn soup_polycube_count(cell_count: usize) -> usize {
-    SOUP_CELL_COUNT.div_ceil(cell_count.max(1))
-}
-
-/// Throws `polycubes` together and runs a rule of the family of Conway's
-/// game of life: a cell with 3 to 6 living cells among its 26 neighbours
-/// lives on, a free cell with exactly 5 is born. `choose_shift` gives how
-/// far each polycube is moved along each axis, among [`SOUP_SIDE`] steps,
-/// and must answer an index below that number.
-///
-/// Measured on soups of four to eight hexacubes: this rule kept all of
-/// them alive and growing slowly, where the two rules known for their
-/// gliders (survival 4-5 birth 5, survival 5-7 birth 6) died out.
+/// Plays the game of life of whole polycubes from `seed`: one dies when
+/// more than two others lean on it, one is born against one or two of the
+/// living. `buds` and `choose` stand for the random choices of each.
 #[must_use]
 pub fn live(
-    polycubes: &[Vec<Coordinates>],
-    mut choose_shift: impl FnMut(usize) -> usize,
+    seed: &[Coordinates],
+    buds: impl FnMut() -> bool,
+    choose: impl FnMut(usize) -> usize,
 ) -> AutomatonRun {
-    let mut soup = Vec::new();
-    for polycube in polycubes {
-        let shift = [0, 1, 2].map(|_| step_count(choose_shift(SOUP_SIDE)));
-        soup.extend(
-            polycube
-                .iter()
-                .map(|cell| [0, 1, 2].map(|axis| cell[axis] + shift[axis])),
-        );
+    let generations = live_as_polycubes(seed, LIFE_RULE, LIFE_WORLD, buds, choose);
+    let identities_by_generation = generations
+        .iter()
+        .map(|living| living.iter().map(|polycube| polycube.identity).collect())
+        .collect();
+    let cells_by_generation = generations
+        .into_iter()
+        .map(|living| {
+            living
+                .into_iter()
+                .flat_map(|polycube| polycube.cells)
+                .collect()
+        })
+        .collect();
+    AutomatonRun {
+        identities_by_generation,
+        ..AutomatonRun::of(cells_by_generation)
     }
-    soup.sort_unstable();
-    soup.dedup();
-    let life_rule = Rule::new(Neighbourhood::FacesEdgesCorners, &[3, 4, 5, 6], &[5])
-        .expect("counts below 26 fit the wide neighbourhood");
-    AutomatonRun::of(evolve(&soup, &life_rule, LIFE_LIMITS).generations)
-}
-
-/// A shift below [`SOUP_SIDE`] always fits a coordinate.
-fn step_count(shift: usize) -> i32 {
-    i32::try_from(shift).unwrap_or(0)
 }
 
 #[cfg(test)]
@@ -286,40 +212,26 @@ mod tests {
 
     const SEED: [Coordinates; 4] = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [1, 1, 1]];
 
-    #[test]
-    fn the_replicator_ends_on_six_copies_of_the_seed() {
-        let run = replicate(&SEED);
-
-        assert_eq!(run.generations.len(), 9);
-        assert_eq!(run.generations[0].len(), SEED.len());
-        assert_eq!(run.generations[8].len(), 6 * SEED.len());
+    /// Choices that look random but are the same at every run.
+    fn varied_choice() -> impl FnMut(usize) -> usize {
+        let mut state: u64 = 0x2545_f491_4f6c_dd1d;
+        move |choice_count| {
+            state = state
+                .wrapping_mul(6_364_136_223_846_793_005)
+                .wrapping_add(1_442_695_040_888_963_407);
+            usize::try_from(state >> 33).expect("31 bits fit") % choice_count
+        }
     }
 
     #[test]
-    fn the_edge_replicator_ends_on_twelve_copies_of_the_seed() {
-        let run = replicate_over_edges(&SEED);
+    fn the_box_holds_every_generation() {
+        let run = bud(&SEED, || true, |_| 0);
 
-        assert_eq!(run.generations.len(), 5);
-        assert_eq!(run.generations[4].len(), 12 * SEED.len());
-    }
-
-    #[test]
-    fn the_box_holds_the_farthest_copies() {
-        let run = replicate(&SEED);
-
-        // Copies stand eight cells away along each axis, both ways.
-        assert_eq!(run.lowest_corner, [-8, -8, -8]);
-        assert_eq!(run.highest_corner, [9, 9, 9]);
-    }
-
-    #[test]
-    fn a_colony_grows_up_to_the_population_limit() {
-        let run = grow(&SEED, || true, |_| 0);
-
-        assert_eq!(run.generations.len(), COLONY_GENERATION_COUNT + 1);
-        let populations: Vec<usize> = run.generations.iter().map(Vec::len).collect();
-        assert!(populations.is_sorted(), "{populations:?}");
-        assert_eq!(populations.last(), Some(&COLONY_POPULATION_LIMIT));
+        for cell in run.generations.iter().flatten() {
+            for (axis, coordinate) in cell.iter().enumerate() {
+                assert!((run.lowest_corner[axis]..=run.highest_corner[axis]).contains(coordinate));
+            }
+        }
     }
 
     #[test]
@@ -329,7 +241,7 @@ mod tests {
         assert_eq!(run.generations.len(), BUDDING_GENERATION_COUNT + 1);
         assert_eq!(
             run.generations.last().map(Vec::len),
-            Some(COLONY_POPULATION_LIMIT / SEED.len() * SEED.len())
+            Some(POPULATION_LIMIT / SEED.len() * SEED.len())
         );
     }
 
@@ -343,37 +255,8 @@ mod tests {
     }
 
     #[test]
-    fn life_starts_from_every_polycube_shifted_into_one_soup() {
-        let mut shifts = [0, 0, 0, 2, 1, 0].into_iter();
-        let run = live(&[SEED.to_vec(), SEED.to_vec()], |_| {
-            shifts.next().expect("three shifts per polycube")
-        });
-
-        let mut soup: Vec<Coordinates> = SEED
-            .iter()
-            .flat_map(|&[x, y, z]| [[x, y, z], [x + 2, y + 1, z]])
-            .collect();
-        soup.sort_unstable();
-        soup.dedup();
-        assert_eq!(run.generations[0], soup);
-    }
-
-    #[test]
-    fn a_soup_holds_about_as_many_cells_whatever_the_polycubes() {
-        assert_eq!(soup_polycube_count(1), 24);
-        assert_eq!(soup_polycube_count(5), 5);
-        assert_eq!(soup_polycube_count(6), 4);
-    }
-
-    #[test]
     fn an_aggregate_gains_whole_polycubes_generation_after_generation() {
-        let mut state: u64 = 0x2545_f491_4f6c_dd1d;
-        let run = aggregate_wanderers(&SEED, |choice_count| {
-            state = state
-                .wrapping_mul(6_364_136_223_846_793_005)
-                .wrapping_add(1_442_695_040_888_963_407);
-            usize::try_from(state >> 33).expect("31 bits fit") % choice_count
-        });
+        let run = aggregate_wanderers(&SEED, varied_choice());
 
         assert_eq!(run.generations.len(), AGGREGATE_GENERATION_COUNT + 1);
         assert_eq!(run.generations[0], SEED);
@@ -385,6 +268,18 @@ mod tests {
                 .all(|population| population % SEED.len() == 0)
         );
         assert_eq!(populations.last(), Some(&AGGREGATE_CELL_COUNT));
+    }
+
+    #[test]
+    fn life_tells_every_polycube_of_every_generation_apart() {
+        let run = live(&SEED, || true, varied_choice());
+
+        assert_eq!(run.generations.len(), LIFE_WORLD.generation_count + 1);
+        assert_eq!(run.identities_by_generation.len(), run.generations.len());
+        for (cells, identities) in run.generations.iter().zip(&run.identities_by_generation) {
+            assert_eq!(cells.len(), identities.len() * SEED.len());
+            assert!(identities.is_sorted_by(|earlier, later| earlier < later));
+        }
     }
 
     #[test]
