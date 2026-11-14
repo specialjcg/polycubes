@@ -68,3 +68,27 @@ fn a_colony_stops_growing_at_the_population_limit() {
     assert!(generations.iter().all(|generation| generation.len() <= 40));
     assert_eq!(generations[12].len(), 40);
 }
+
+#[test]
+fn a_newborn_touches_no_cell_but_its_mother() {
+    let mut division_index = 0;
+    let generations = grow_colony(
+        &[[0, 0, 0]],
+        8,
+        POPULATION_LIMIT,
+        || true,
+        |free_neighbour_count| {
+            division_index += 3;
+            division_index % free_neighbour_count
+        },
+    );
+
+    let colony = generations.last().expect("the seed at least");
+    for (birth_rank, &newborn) in colony.iter().enumerate().skip(1) {
+        let touched_elders = colony[..birth_rank]
+            .iter()
+            .filter(|&&elder| touches(newborn, &[elder]))
+            .count();
+        assert_eq!(touched_elders, 1, "cell {birth_rank} leans on several");
+    }
+}

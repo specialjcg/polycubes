@@ -1,4 +1,5 @@
-//! A colony of cells that divide into the free cells beside them.
+//! A colony of cells that divide into the free cells beside them, branching
+//! out: a newborn touches no cell but its mother.
 
 use std::collections::HashSet;
 
@@ -7,10 +8,12 @@ use polycubes_core::Coordinates;
 /// Grows a colony from `seed` for `generation_count` generations and
 /// returns them all, the seed first, each with its cells in birth order.
 ///
-/// At each generation every cell with a free face neighbour divides when
-/// `divides` says so, into the free neighbour picked by `choose_neighbour`
-/// among their number, which must answer an index below that number. A cell hemmed in on all sides no longer divides, and
-/// no cell is born once the colony holds `population_limit` cells.
+/// At each generation every cell with room beside it divides when
+/// `divides` says so. Room is a free face neighbour that touches no other
+/// cell of the colony; `choose_neighbour` picks one among their number, and
+/// must answer an index below that number. A cell with no room no longer
+/// divides, and no cell is born once the colony holds `population_limit`
+/// cells.
 #[must_use]
 pub fn grow_colony(
     seed: &[Coordinates],
@@ -28,9 +31,10 @@ pub fn grow_colony(
             if cells.len() >= population_limit {
                 break;
             }
-            let free_neighbours: Vec<Coordinates> = face_neighbours(cells[parent_index])
+            let mother = cells[parent_index];
+            let free_neighbours: Vec<Coordinates> = face_neighbours(mother)
                 .into_iter()
-                .filter(|neighbour| !occupied.contains(neighbour))
+                .filter(|&neighbour| is_clear_of_all_but(neighbour, mother, &occupied))
                 .collect();
             if free_neighbours.is_empty() || !divides() {
                 continue;
@@ -42,6 +46,19 @@ pub fn grow_colony(
         generations.push(cells.clone());
     }
     generations
+}
+
+/// Whether `cell` is free and touches no cell but `mother`: newborns that
+/// lean on any neighbour fill the colony into a ball, these branch out.
+fn is_clear_of_all_but(
+    cell: Coordinates,
+    mother: Coordinates,
+    occupied: &HashSet<Coordinates>,
+) -> bool {
+    !occupied.contains(&cell)
+        && face_neighbours(cell)
+            .into_iter()
+            .all(|neighbour| neighbour == mother || !occupied.contains(&neighbour))
 }
 
 pub(crate) fn face_neighbours([x, y, z]: Coordinates) -> [Coordinates; 6] {
