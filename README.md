@@ -190,3 +190,7 @@ TDD (rouge → vert → refactor), `cargo fmt`, `cargo clippy --all-targets -- -
 - Mise à jour des sommes sans branchement (multiplication par un masque d'état au lieu d'un `match`) : n = 15 en 58,9 s contre 35,8 s. Une seule mesure de chaque côté, machine chargée.
 - Balayage : lire une seule fois les 6 voisins de la cellule non-essayée, sauter les cellules sans voisin libre et les impasses : n = 15 en 13,6 s et 13,8 s contre 12,8 s. Pas de gain.
 - Balayage : boucle interne des chemins sans branchement : n = 15 en 18,5 s contre 12,8 s (seconde mesure à 20,7 s, machine redevenue chargée).
+
+## Licence
+
+MIT, voir [LICENSE](LICENSE).
