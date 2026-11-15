@@ -4,6 +4,8 @@ Campagne du 14 novembre 2026, campagne témoin du 15. Données brutes, une
 ligne par simulation : [mesures.csv](mesures.csv) pour les polycubes de 5
 cubes, [mesures-cubes-isoles.csv](mesures-cubes-isoles.csv) pour le témoin.
 
+![Dimension fractale et nombre de boucles des 20 000 agrégats](resultats.png)
+
 ## Ce qui a été simulé
 
 - **Modèle** : agrégation limitée par diffusion, le modèle classique du givre,
@@ -122,6 +124,12 @@ Une vingtaine de minutes sur 8 cœurs. Pour le témoin, ajouter `1` (cubes par
 polycube) à la fin de la commande et changer le fichier de sortie : une
 dizaine de minutes. Les tirages sont aléatoires : une
 nouvelle campagne donne d'autres lignes, et des moyennes proches.
+
+Pour retracer le graphique (Python avec matplotlib) :
+
+```bash
+python3 docs/agregation/figure.py docs/agregation/resultats.png docs/agregation/resultats.svg
+```
 
 ## Sources
 
