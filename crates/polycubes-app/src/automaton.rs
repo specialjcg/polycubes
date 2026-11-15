@@ -14,8 +14,9 @@ pub const MAX_SEED_CELL_COUNT: usize = 6;
 /// Cells drawn at most: beyond, the 3D view slows down.
 const POPULATION_LIMIT: usize = 1000;
 
-/// Cells an aggregate aims at, whatever the size of its polycubes.
-const AGGREGATE_CELL_COUNT: usize = 600;
+/// Largest aggregate: it takes some 45 seconds to grow, and the 3D view
+/// draws it as one mesh of that many cubes.
+pub const MAX_AGGREGATE_CELL_COUNT: usize = 10_000;
 
 /// Generations the arrivals of an aggregate are spread over.
 const AGGREGATE_GENERATION_COUNT: usize = 24;
@@ -51,6 +52,8 @@ const LIFE_WORLD: PolycubeWorld = PolycubeWorld {
 pub enum AutomatonError {
     #[error("cell count must be between 1 and {MAX_SEED_CELL_COUNT}, got {0}")]
     CellCountOutOfRange(usize),
+    #[error("an aggregate holds between 1 and {MAX_AGGREGATE_CELL_COUNT} cells, got {0}")]
+    AggregateCellCountOutOfRange(usize),
 }
 
 /// How the seed is chosen.
@@ -125,6 +128,19 @@ pub fn check_seed_cell_count(cell_count: usize) -> Result<(), AutomatonError> {
     Ok(())
 }
 
+/// Checks that an aggregate of `cell_count` cells may be asked for.
+///
+/// # Errors
+///
+/// Returns [`AutomatonError::AggregateCellCountOutOfRange`] if `cell_count`
+/// is zero or exceeds [`MAX_AGGREGATE_CELL_COUNT`].
+pub fn check_aggregate_cell_count(cell_count: usize) -> Result<(), AutomatonError> {
+    if cell_count == 0 || cell_count > MAX_AGGREGATE_CELL_COUNT {
+        return Err(AutomatonError::AggregateCellCountOutOfRange(cell_count));
+    }
+    Ok(())
+}
+
 /// Grows a colony of copies of `seed`; `buds` and `choose_placement` stand
 /// for the random choices of each copy.
 #[must_use]
@@ -163,16 +179,17 @@ pub fn bud_mutants(
     }
 }
 
-/// Grows an aggregate from `seed`: copies of it, turned at random, wander
-/// in and stick where they first touch. `choose` stands for every random
-/// choice. A generation lists the polycubes stuck so far, in the order
+/// Grows an aggregate of about `cell_count` cells from `seed`: copies of
+/// it, turned at random, wander in and stick where they first touch.
+/// `choose` stands for every random choice. A generation lists the polycubes stuck so far, in the order
 /// they came.
 #[must_use]
 pub fn aggregate_wanderers(
     seed: &[Coordinates],
+    cell_count: usize,
     choose: impl FnMut(usize) -> usize,
 ) -> AutomatonRun {
-    let polycube_count = AGGREGATE_CELL_COUNT / seed.len().max(1);
+    let polycube_count = cell_count / seed.len().max(1);
     let polycubes = aggregate(seed, polycube_count, choose);
     let arrivals_per_generation = polycube_count.div_ceil(AGGREGATE_GENERATION_COUNT).max(1);
     let generations = (0..=AGGREGATE_GENERATION_COUNT)
@@ -300,7 +317,7 @@ mod tests {
 
     #[test]
     fn an_aggregate_gains_whole_polycubes_generation_after_generation() {
-        let run = aggregate_wanderers(&SEED, varied_choice());
+        let run = aggregate_wanderers(&SEED, 200, varied_choice());
 
         assert_eq!(run.generations.len(), AGGREGATE_GENERATION_COUNT + 1);
         assert_eq!(run.generations[0], SEED);
@@ -311,7 +328,18 @@ mod tests {
                 .iter()
                 .all(|population| population % SEED.len() == 0)
         );
-        assert_eq!(populations.last(), Some(&AGGREGATE_CELL_COUNT));
+        assert_eq!(populations.last(), Some(&200));
+    }
+
+    #[test]
+    fn refuses_aggregates_outside_the_range() {
+        for cell_count in [0, MAX_AGGREGATE_CELL_COUNT + 1] {
+            assert_eq!(
+                check_aggregate_cell_count(cell_count),
+                Err(AutomatonError::AggregateCellCountOutOfRange(cell_count))
+            );
+        }
+        assert_eq!(check_aggregate_cell_count(MAX_AGGREGATE_CELL_COUNT), Ok(()));
     }
 
     #[test]

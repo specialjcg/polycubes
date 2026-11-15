@@ -379,13 +379,14 @@ port requestAutomatonRunPort : Encode.Value -> Cmd msg
 port automatonRunFinishedPort : (Decode.Value -> msg) -> Sub msg
 
 
-requestAutomatonRun : { cellCount : Int, seedKind : String, mode : String } -> Cmd msg
+requestAutomatonRun : { cellCount : Int, seedKind : String, mode : String, aggregateCellCount : Int } -> Cmd msg
 requestAutomatonRun request =
     requestAutomatonRunPort
         (Encode.object
             [ ( "cellCount", Encode.int request.cellCount )
             , ( "seedKind", Encode.string request.seedKind )
             , ( "mode", Encode.string request.mode )
+            , ( "aggregateCellCount", Encode.int request.aggregateCellCount )
             ]
         )
 

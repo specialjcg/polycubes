@@ -11,7 +11,8 @@
 // each: every copy then gets its own colour, or with `copy-parents="[...]"`,
 // the birth rank of the parent of each copy, a colour close to its parent's. `age-span="n"` tells that the
 // cells come in birth order, n at most: they run through the rainbow, the
-// eldest red, the youngest violet. `copy-ids="[...]"` gives what tells each copy
+// eldest red, the youngest violet. `crowd` then draws them all as one mesh,
+// for thousands of cells. `copy-ids="[...]"` gives what tells each copy
 // from all others: it keeps its cubes while others die. `copy-shapes="[...]"`
 // then gives the shape of each copy, one colour per shape.
 // The Elm application owns the state; this element only draws what its
@@ -67,6 +68,7 @@ class PolycubeScene extends HTMLElement {
     "copy-parents",
     "copy-ids",
     "copy-shapes",
+    "crowd",
   ];
 
   connectedCallback() {
@@ -103,6 +105,7 @@ class PolycubeScene extends HTMLElement {
     this.resizeObserver.disconnect();
     this.controls.dispose();
     this.clearCubes();
+    this.disposeCrowd();
     this.renderer.dispose();
     this.renderer.domElement.remove();
     this.renderer = null;
@@ -155,6 +158,11 @@ class PolycubeScene extends HTMLElement {
   // on screen: a key names a cell and how it is drawn.
   showCells() {
     const placedCells = this.cellsOf("cells");
+    if (this.hasAttribute("crowd")) {
+      this.showCrowd(placedCells);
+      return;
+    }
+    this.disposeCrowd();
     const extent = Number(this.getAttribute("extent") ?? placedCells.length);
     const lastPlacementIndex = Math.max(extent - 1, 1);
     const copySize = Number(this.getAttribute("copy-size") ?? 0);
@@ -213,6 +221,51 @@ class PolycubeScene extends HTMLElement {
     }
     this.frame();
     this.showFirstCubes();
+  }
+
+  // Thousands of cells are drawn as one mesh of many cubes, coloured by
+  // age and without their edges: a mesh and its edges per cube, as
+  // elsewhere, would bring the view to a halt.
+  showCrowd(cells) {
+    this.clearCubes();
+    const ageSpan = Number(this.getAttribute("age-span") ?? cells.length);
+    const capacity = Math.max(cells.length, ageSpan, 1);
+    if (!this.crowd || this.crowd.instanceMatrix.count < capacity) {
+      this.disposeCrowd();
+      this.crowd = new THREE.InstancedMesh(
+        new THREE.BoxGeometry(CUBE_SIDE, CUBE_SIDE, CUBE_SIDE),
+        new THREE.MeshStandardMaterial(),
+        capacity,
+      );
+      // Its bounding sphere is that of one cube, which would hide the
+      // whole crowd whenever the first cube leaves the view.
+      this.crowd.frustumCulled = false;
+      this.scene.add(this.crowd);
+    }
+    const placement = new THREE.Matrix4();
+    cells.forEach(([x, y, z], placementIndex) => {
+      // The same turn from lattice to scene as `placeInScene`.
+      placement.makeTranslation(x, z, -y);
+      this.crowd.setMatrixAt(placementIndex, placement);
+      this.crowd.setColorAt(placementIndex, colourOfAge(placementIndex / ageSpan));
+    });
+    this.crowd.count = cells.length;
+    this.crowd.instanceMatrix.needsUpdate = true;
+    if (this.crowd.instanceColor) {
+      this.crowd.instanceColor.needsUpdate = true;
+    }
+    this.frame();
+  }
+
+  disposeCrowd() {
+    if (!this.crowd) {
+      return;
+    }
+    this.scene.remove(this.crowd);
+    this.crowd.geometry.dispose();
+    this.crowd.material.dispose();
+    this.crowd.dispose();
+    this.crowd = null;
   }
 
   // Hides the cubes beyond the `shown` attribute; a cube that becomes

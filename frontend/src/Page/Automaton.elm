@@ -65,6 +65,7 @@ type alias Model =
     { cellCount : Int
     , seedKind : SeedKind
     , mode : Mode
+    , aggregateCellCount : Int
     , run : Run
     , isPlaying : Bool
     }
@@ -92,6 +93,7 @@ type Msg
     = CellCountChosen String
     | SeedKindChosen SeedKind
     | ModeChosen Mode
+    | AggregateCellCountChosen Int
     | RunRequested
     | PlaybackToggled
     | RunFinished (Result String AutomatonRun)
@@ -103,6 +105,7 @@ init =
     { cellCount = initialCellCount
     , seedKind = Uniform
     , mode = Aggregation
+    , aggregateCellCount = 600
     , run = Running
     , isPlaying = True
     }
@@ -122,6 +125,7 @@ requestRun model =
         { cellCount = model.cellCount
         , seedKind = seedKindName model.seedKind
         , mode = modeName model.mode
+        , aggregateCellCount = model.aggregateCellCount
         }
     )
 
@@ -171,6 +175,9 @@ update msg model =
 
         ModeChosen mode ->
             requestRun { model | mode = mode }
+
+        AggregateCellCountChosen aggregateCellCount ->
+            requestRun { model | aggregateCellCount = aggregateCellCount }
 
         RunRequested ->
             requestRun model
@@ -253,6 +260,14 @@ view model =
             ModeChosen
             model.mode
             [ ( Aggregation, "Agrégation" ), ( Life, "Vie" ), ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ) ]
+        , if model.mode == Aggregation then
+            viewChoice "Taille"
+                AggregateCellCountChosen
+                model.aggregateCellCount
+                [ ( 600, "600 cubes" ), ( 3000, "3 000 cubes (≈ 8 s)" ), ( 10000, "10 000 cubes (≈ 45 s)" ) ]
+
+          else
+            text ""
         , p [ Attr.class "explanation" ] [ text (explain model.mode) ]
         , viewRun model.run
         ]

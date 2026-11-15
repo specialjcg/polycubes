@@ -93,7 +93,21 @@ colouringAttributes colouring =
             ]
 
         ByAge largestCellCount ->
-            [ Attr.attribute "age-span" (String.fromInt largestCellCount) ]
+            Attr.attribute "age-span" (String.fromInt largestCellCount)
+                :: (if largestCellCount > largestCellCountDrawnOneByOne then
+                        [ Attr.attribute "crowd" "" ]
+
+                    else
+                        []
+                   )
+
+
+{-| Beyond that many cells the element draws them all as one mesh, without
+their edges: a mesh per cube would bring the view to a halt.
+-}
+largestCellCountDrawnOneByOne : Int
+largestCellCountDrawnOneByOne =
+    1500
 
 
 copySizeAttribute : Int -> Html.Attribute msg

@@ -134,20 +134,26 @@ fn pick_seed(
     })
 }
 
-/// Picks a seed of `cell_count` cells and makes it grow.
+/// Picks a seed of `cell_count` cells and makes it grow; `aggregate_cell_count`
+/// tells how large an aggregate is wanted, and matters to that mode only.
 #[tauri::command(async)]
 fn run_automaton(
     cell_count: usize,
     seed_kind: SeedKind,
     mode: GrowthMode,
+    aggregate_cell_count: usize,
     drawer: tauri::State<'_, Mutex<PolycubeDrawer>>,
 ) -> Result<AutomatonRun, String> {
     automaton::check_seed_cell_count(cell_count).map_err(|error| error.to_string())?;
+    automaton::check_aggregate_cell_count(aggregate_cell_count)
+        .map_err(|error| error.to_string())?;
     let seed = pick_seed(cell_count, seed_kind, &drawer)?;
     let choose = |choice_count| rand::random_range(0..choice_count);
     let buds = || rand::random_bool(automaton::BUDDING_CHANCE);
     Ok(match mode {
-        GrowthMode::Aggregation => automaton::aggregate_wanderers(&seed, choose),
+        GrowthMode::Aggregation => {
+            automaton::aggregate_wanderers(&seed, aggregate_cell_count, choose)
+        }
         GrowthMode::Mutation => automaton::bud_mutants(&seed, buds, choose),
         GrowthMode::Budding => automaton::bud(&seed, buds, choose),
         GrowthMode::Life => automaton::live(&seed, buds, choose),
