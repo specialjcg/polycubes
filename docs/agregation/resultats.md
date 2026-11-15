@@ -1,7 +1,8 @@
 # Agrégation de polycubes : 10 000 simulations comparées à des objets naturels
 
-Campagne du 14 novembre 2026. Données brutes : [mesures.csv](mesures.csv), une
-ligne par simulation.
+Campagne du 14 novembre 2026, campagne témoin du 15. Données brutes, une
+ligne par simulation : [mesures.csv](mesures.csv) pour les polycubes de 5
+cubes, [mesures-cubes-isoles.csv](mesures-cubes-isoles.csv) pour le témoin.
 
 ## Ce qui a été simulé
 
@@ -51,13 +52,41 @@ comparées, ce n'est pas concluant. Les graines à une boucle donnent 2,226
 **Boucles et dimension.** Corrélation de −0,03 entre les deux : le nombre de
 boucles d'un agrégat ne dit rien de sa dimension fractale.
 
+## Campagne témoin : des cubes isolés
+
+Même modèle, même taille (600 cubes), même nombre (10 000), mais l'objet qui
+erre est un cube seul : c'est l'agrégation des livres. Elle sert à savoir
+d'où vient l'écart avec la valeur de référence de 2,50.
+
+| Mesure | Polycubes de 5 cubes | Cubes isolés |
+|---|---|---|
+| Dimension fractale, moyenne | 2,246 ± 0,003 | 2,417 ± 0,002 |
+| Dimension fractale, écart-type | 0,262 | 0,201 |
+| Boucles, moyenne | 58,5 | 75,3 |
+| Boucles, écart-type | 38,0 | 9,4 |
+| Faces exposées par cube | 3,81 | 3,75 |
+| Plus grand côté de la boîte | 35,0 | 29,0 |
+
+- **L'écart avec la référence se partage en deux.** De 2,50 à 2,42 : la
+  petite taille des agrégats et la grille cubique. De 2,42 à 2,25 : le fait
+  que ce sont des polycubes entiers qui errent. Le second effet est deux fois
+  plus fort que le premier.
+- **Des polycubes entiers donnent des agrégats plus étalés** : boîte de 35
+  cases de côté contre 29, pour le même nombre de cubes. Un polycube touche
+  l'amas plus tôt qu'un cube seul, et dépasse de là où il se colle.
+- **Les boucles se comportent tout autrement.** Avec des cubes isolés,
+  l'agrégat ferme 75 boucles, à 9 près. Avec des polycubes, le nombre dépend
+  avant tout de la graine : chaque arrivant apporte les boucles de sa propre
+  forme, donc une graine à une boucle en donne d'office 120.
+
 ## Comparaison
 
 | Objet | Dimension fractale | Comment c'est mesuré |
 |---|---|---|
 | Suie de flamme | 1,82 ± 0,08 | Microscope électronique |
 | Arbre bronchique humain | 1,5 à 1,7 | Comptage de boîtes sur scanner |
-| **Nos agrégats de polycubes** | **2,25 ± 0,26** | **Masse contre rayon de giration** |
+| **Nos agrégats de polycubes de 5 cubes** | **2,25 ± 0,26** | **Masse contre rayon de giration** |
+| **Nos agrégats de cubes isolés** | **2,42 ± 0,20** | **Idem** |
 | Agrégation limitée par diffusion, référence | 2,50 ± 0,01 | Simulation hors réseau, très grands agrégats |
 | Brocoli | environ 2,7 | Prédit à partir de coupes |
 | Chou-fleur | environ 2,8 | Prédit à partir de coupes |
@@ -71,11 +100,10 @@ existent, mais les extraits lus n'en donnent pas.
 - Nos agrégats sont nettement des objets branchus : très loin d'une boule
   pleine (3), plus denses que la suie (1,8), plus aérés qu'un chou-fleur (2,8).
 - **Ils sont en dessous de la valeur de référence de leur propre modèle**
-  (2,25 contre 2,50). Deux causes probables, non départagées ici : des
-  agrégats trop petits (600 cubes, là où la référence en utilise des
-  millions), et des arrivants de 5 cubes qui se collent plus tôt qu'un cube
-  isolé, ce qui allonge les branches. Une campagne avec des cubes isolés
-  permettrait de trancher.
+  (2,25 contre 2,50). La campagne témoin en donne les deux causes : un tiers
+  de l'écart vient de la petite taille et de la grille, deux tiers viennent
+  des polycubes entiers. Des agrégats de polycubes sont donc réellement plus
+  aérés que l'agrégation classique, ce n'est pas un défaut de mesure.
 - Les dimensions du tableau ne sont **pas mesurées de la même façon** d'une
   ligne à l'autre. Les spécialistes préviennent que ces méthodes ne sont pas
   directement comparables. Le tableau situe des ordres de grandeur, rien de
@@ -90,7 +118,9 @@ existent, mais les extraits lus n'en donnent pas.
 cargo run --release -p polycubes-automaton --example aggregation_campaign -- 10000 docs/agregation/mesures.csv
 ```
 
-Une vingtaine de minutes sur 8 cœurs. Les tirages sont aléatoires : une
+Une vingtaine de minutes sur 8 cœurs. Pour le témoin, ajouter `1` (cubes par
+polycube) à la fin de la commande et changer le fichier de sortie : une
+dizaine de minutes. Les tirages sont aléatoires : une
 nouvelle campagne donne d'autres lignes, et des moyennes proches.
 
 ## Sources

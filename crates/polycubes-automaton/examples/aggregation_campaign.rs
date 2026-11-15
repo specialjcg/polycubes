@@ -1,8 +1,9 @@
-//! Many aggregates grown from pentacubes drawn uniformly, measured one by
+//! Many aggregates grown from polycubes drawn uniformly, measured one by
 //! one into a CSV file: the fractal dimension of the growth, its loops and
-//! its exposed faces.
+//! its exposed faces. Every aggregate holds the same number of cells,
+//! whatever the size of its polycubes.
 //!
-//! Usage: `cargo run --release -p polycubes-automaton --example aggregation_campaign -- <aggregate count> <output.csv>`
+//! Usage: `cargo run --release -p polycubes-automaton --example aggregation_campaign -- <aggregate count> <output.csv> [cells per polycube, 5 by default]`
 
 use std::collections::{BTreeMap, HashSet};
 use std::fs::File;
@@ -14,8 +15,8 @@ use polycubes_core::Coordinates;
 use polycubes_sampling::{RankedPolycubes, exposed_face_count};
 use rayon::prelude::*;
 
-const SEED_CELL_COUNT: usize = 5;
-const POLYCUBES_PER_AGGREGATE: usize = 120;
+const DEFAULT_SEED_CELL_COUNT: usize = 5;
+const CELLS_PER_AGGREGATE: usize = 600;
 const AGGREGATES_BETWEEN_PROGRESS_LINES: usize = 500;
 
 struct Measure {
@@ -53,9 +54,9 @@ fn shape_name(cells: &[Coordinates]) -> String {
         .join(" ")
 }
 
-/// Pentacubes drawn uniformly among the fixed ones, one per aggregate.
-fn draw_seeds(seed_count: usize) -> Vec<Vec<Coordinates>> {
-    let mut ranked_polycubes = RankedPolycubes::new(SEED_CELL_COUNT);
+/// Polycubes drawn uniformly among the fixed ones, one per aggregate.
+fn draw_seeds(seed_count: usize, seed_cell_count: usize) -> Vec<Vec<Coordinates>> {
+    let mut ranked_polycubes = RankedPolycubes::new(seed_cell_count);
     let polycube_count = ranked_polycubes.count();
     (0..seed_count)
         .map(|_| {
@@ -67,7 +68,7 @@ fn draw_seeds(seed_count: usize) -> Vec<Vec<Coordinates>> {
 }
 
 fn grow_and_measure(seed: &[Coordinates]) -> Measure {
-    let polycubes = aggregate(seed, POLYCUBES_PER_AGGREGATE, |choice_count| {
+    let polycubes = aggregate(seed, CELLS_PER_AGGREGATE / seed.len(), |choice_count| {
         rand::random_range(0..choice_count)
     });
     let cells = polycubes.concat();
@@ -162,7 +163,15 @@ fn main() {
         .expect("first argument: aggregate count");
     let output_path = arguments.next().expect("second argument: output CSV path");
 
-    let seeds = draw_seeds(aggregate_count);
+    let seed_cell_count: usize = arguments
+        .next()
+        .map_or(DEFAULT_SEED_CELL_COUNT, |argument| {
+            argument
+                .parse()
+                .expect("third argument: cells per polycube")
+        });
+
+    let seeds = draw_seeds(aggregate_count, seed_cell_count);
     let done_count = AtomicUsize::new(0);
     let measures: Vec<Measure> = seeds
         .par_iter()
