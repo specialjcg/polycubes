@@ -19,6 +19,7 @@ roche.
 les premiers, violet pour les derniers.
 
 Écrit en Rust, affiché avec Tauri, Elm et Three.js.
+Code : https://github.com/specialjcg/polycubes
 
 ## Version longue (à ajouter si la place le permet)
 
@@ -43,7 +44,7 @@ commun. Un chou-fleur ne pousse pas par collage de particules errantes.
 
 ## À vérifier avant de publier
 
-- Le lien vers le dépôt : il n'a pas de dépôt distant pour l'instant.
+- Le lien vers le dépôt : <https://github.com/specialjcg/polycubes>.
 - Les chiffres naturels et leurs sources sont dans [resultats.md](resultats.md).
 - L'agrégat du GIF a une dimension mesurée de 2,52 : c'est un seul tirage,
   pas une moyenne, à ne pas citer comme résultat.

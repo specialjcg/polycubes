@@ -16,9 +16,8 @@ l'OEIS n'accepte que l'anglais.
   le jour de la soumission.
 - **Référence Madras.** Revue, volume et pages écrits de mémoire dans LINKS ;
   à contrôler sur la page de l'éditeur (DOI 10.1007/BF01608793).
-- **Lien vers le programme.** Le dépôt n'a pas de dépôt distant. Soit le
-  publier et mettre son adresse dans LINKS, soit joindre le fichier à la
-  soumission.
+- **Lien vers le programme.** Le dépôt est public depuis le 15 novembre 2026 :
+  <https://github.com/specialjcg/polycubes>. Son adresse est dans LINKS.
 - **Nom de l'auteur.** L'OEIS demande le vrai nom ; il faut un compte sur
   oeis.org.
 
@@ -67,7 +66,8 @@ none with 12 cells has cyclomatic number 8.
 N. Madras, <a href="https://arxiv.org/abs/math/9902161">A pattern theorem for
 lattice clusters</a>, Annals of Combinatorics 3 (1999), 357-384.
 
-(à ajouter : adresse du dépôt une fois publié)
+Jean-Charles Gouleau, <a href="https://github.com/specialjcg/polycubes">Rust program
+counting fixed polycubes by cyclomatic number</a>.
 
 **EXAMPLE**
 
