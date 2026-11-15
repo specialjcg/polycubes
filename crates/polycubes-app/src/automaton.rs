@@ -41,12 +41,12 @@ const LIFE_RULE: PolycubeLifeRule = PolycubeLifeRule {
     mutation_one_in: 5,
 };
 
-/// The world is a cube of 11 cells a side around the seed: births go on
-/// wherever room is left in it, so the game never freezes.
-const LIFE_WORLD: PolycubeWorld = PolycubeWorld {
-    generation_count: 200,
-    reach: 5,
-};
+const LIFE_GENERATION_COUNT: usize = 200;
+
+/// The world of the game reaches at most that far from the seed along each
+/// axis: a cube of 21 cells a side, where 200 generations take some 45
+/// seconds and 700 polycubes live at once.
+pub const MAX_LIFE_WORLD_REACH: i32 = 10;
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum AutomatonError {
@@ -54,6 +54,8 @@ pub enum AutomatonError {
     CellCountOutOfRange(usize),
     #[error("an aggregate holds between 1 and {MAX_AGGREGATE_CELL_COUNT} cells, got {0}")]
     AggregateCellCountOutOfRange(usize),
+    #[error("the world of life reaches between 1 and {MAX_LIFE_WORLD_REACH} cells, got {0}")]
+    LifeWorldReachOutOfRange(i32),
 }
 
 /// How the seed is chosen.
@@ -141,6 +143,19 @@ pub fn check_aggregate_cell_count(cell_count: usize) -> Result<(), AutomatonErro
     Ok(())
 }
 
+/// Checks that a world of life reaching `reach` cells may be asked for.
+///
+/// # Errors
+///
+/// Returns [`AutomatonError::LifeWorldReachOutOfRange`] if `reach` is below
+/// one or exceeds [`MAX_LIFE_WORLD_REACH`].
+pub fn check_life_world_reach(reach: i32) -> Result<(), AutomatonError> {
+    if !(1..=MAX_LIFE_WORLD_REACH).contains(&reach) {
+        return Err(AutomatonError::LifeWorldReachOutOfRange(reach));
+    }
+    Ok(())
+}
+
 /// Grows a colony of copies of `seed`; `buds` and `choose_placement` stand
 /// for the random choices of each copy.
 #[must_use]
@@ -204,14 +219,22 @@ pub fn aggregate_wanderers(
 /// Plays the game of life of whole polycubes from `seed`: one dies when
 /// more than two others lean on it, one is born against one or two of the
 /// living, with the shape of its parent or, one time in five, that shape
-/// with one cell moved. `buds` and `choose` stand for the random choices of each.
+/// with one cell moved. The world is a cube reaching `world_reach` cells
+/// from the seed along each axis: births go on wherever room is left in it,
+/// so the game never freezes. `buds` and `choose` stand for the random
+/// choices of each.
 #[must_use]
 pub fn live(
     seed: &[Coordinates],
+    world_reach: i32,
     buds: impl FnMut() -> bool,
     choose: impl FnMut(usize) -> usize,
 ) -> AutomatonRun {
-    live_in(LIFE_WORLD, seed, buds, choose)
+    let world = PolycubeWorld {
+        generation_count: LIFE_GENERATION_COUNT,
+        reach: world_reach,
+    };
+    live_in(world, seed, buds, choose)
 }
 
 fn live_in(
@@ -329,6 +352,17 @@ mod tests {
                 .all(|population| population % SEED.len() == 0)
         );
         assert_eq!(populations.last(), Some(&200));
+    }
+
+    #[test]
+    fn refuses_life_worlds_outside_the_range() {
+        for reach in [0, MAX_LIFE_WORLD_REACH + 1] {
+            assert_eq!(
+                check_life_world_reach(reach),
+                Err(AutomatonError::LifeWorldReachOutOfRange(reach))
+            );
+        }
+        assert_eq!(check_life_world_reach(MAX_LIFE_WORLD_REACH), Ok(()));
     }
 
     #[test]

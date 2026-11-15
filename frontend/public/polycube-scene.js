@@ -38,6 +38,7 @@ const COPY_LIGHTNESS = 0.58;
 // The rainbow stops at violet: going round to red again would give the
 // youngest cells the colour of the eldest.
 const YOUNGEST_HUE = 0.78;
+const CROWD_SPARE_ROOM = 1.5;
 // Farthest a child's hue may stand from its parent's, as a share of the
 // colour wheel, when copies are coloured along their lineages.
 const LARGEST_HUE_DRIFT = 0.28;
@@ -224,14 +225,24 @@ class PolycubeScene extends HTMLElement {
   }
 
   // Thousands of cells are drawn as one mesh of many cubes, coloured by
-  // age and without their edges: a mesh and its edges per cube, as
+  // shape when `copy-shapes` tells it and by age otherwise, without their
+  // edges: a mesh and its edges per cube, as
   // elsewhere, would bring the view to a halt.
   showCrowd(cells) {
     this.clearCubes();
     const ageSpan = Number(this.getAttribute("age-span") ?? cells.length);
-    const capacity = Math.max(cells.length, ageSpan, 1);
-    if (!this.crowd || this.crowd.instanceMatrix.count < capacity) {
+    const copySize = Number(this.getAttribute("copy-size") ?? 0);
+    const shapeOfCopy = this.intsOf("copy-shapes");
+    const colourOf = (placementIndex) => {
+      const shape = copySize > 0 ? shapeOfCopy[Math.floor(placementIndex / copySize)] : undefined;
+      return shape === undefined
+        ? colourOfAge(placementIndex / ageSpan)
+        : colourOfHue(shape * COPY_HUE_STEP);
+    };
+    if (!this.crowd || this.crowd.instanceMatrix.count < cells.length) {
       this.disposeCrowd();
+      // Room to spare, so that a crowd that grows is not rebuilt each time.
+      const capacity = Math.max(Math.ceil(cells.length * CROWD_SPARE_ROOM), ageSpan, 1);
       this.crowd = new THREE.InstancedMesh(
         new THREE.BoxGeometry(CUBE_SIDE, CUBE_SIDE, CUBE_SIDE),
         new THREE.MeshStandardMaterial(),
@@ -247,7 +258,7 @@ class PolycubeScene extends HTMLElement {
       // The same turn from lattice to scene as `placeInScene`.
       placement.makeTranslation(x, z, -y);
       this.crowd.setMatrixAt(placementIndex, placement);
-      this.crowd.setColorAt(placementIndex, colourOfAge(placementIndex / ageSpan));
+      this.crowd.setColorAt(placementIndex, colourOf(placementIndex));
     });
     this.crowd.count = cells.length;
     this.crowd.instanceMatrix.needsUpdate = true;

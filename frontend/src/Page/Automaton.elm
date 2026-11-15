@@ -66,6 +66,7 @@ type alias Model =
     , seedKind : SeedKind
     , mode : Mode
     , aggregateCellCount : Int
+    , lifeWorldReach : Int
     , run : Run
     , isPlaying : Bool
     }
@@ -94,6 +95,7 @@ type Msg
     | SeedKindChosen SeedKind
     | ModeChosen Mode
     | AggregateCellCountChosen Int
+    | LifeWorldReachChosen Int
     | RunRequested
     | PlaybackToggled
     | RunFinished (Result String AutomatonRun)
@@ -106,6 +108,7 @@ init =
     , seedKind = Uniform
     , mode = Aggregation
     , aggregateCellCount = 600
+    , lifeWorldReach = 5
     , run = Running
     , isPlaying = True
     }
@@ -126,6 +129,7 @@ requestRun model =
         , seedKind = seedKindName model.seedKind
         , mode = modeName model.mode
         , aggregateCellCount = model.aggregateCellCount
+        , lifeWorldReach = model.lifeWorldReach
         }
     )
 
@@ -178,6 +182,9 @@ update msg model =
 
         AggregateCellCountChosen aggregateCellCount ->
             requestRun { model | aggregateCellCount = aggregateCellCount }
+
+        LifeWorldReachChosen lifeWorldReach ->
+            requestRun { model | lifeWorldReach = lifeWorldReach }
 
         RunRequested ->
             requestRun model
@@ -260,14 +267,21 @@ view model =
             ModeChosen
             model.mode
             [ ( Aggregation, "Agrégation" ), ( Life, "Vie" ), ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ) ]
-        , if model.mode == Aggregation then
-            viewChoice "Taille"
-                AggregateCellCountChosen
-                model.aggregateCellCount
-                [ ( 600, "600 cubes" ), ( 3000, "3 000 cubes (≈ 8 s)" ), ( 10000, "10 000 cubes (≈ 45 s)" ) ]
+        , case model.mode of
+            Aggregation ->
+                viewChoice "Taille"
+                    AggregateCellCountChosen
+                    model.aggregateCellCount
+                    [ ( 600, "600 cubes" ), ( 3000, "3 000 cubes (≈ 8 s)" ), ( 10000, "10 000 cubes (≈ 45 s)" ) ]
 
-          else
-            text ""
+            Life ->
+                viewChoice "Monde"
+                    LifeWorldReachChosen
+                    model.lifeWorldReach
+                    [ ( 5, "11 cases de côté (≈ 6 s)" ), ( 7, "15 cases (≈ 13 s)" ), ( 10, "21 cases (≈ 45 s)" ) ]
+
+            _ ->
+                text ""
         , p [ Attr.class "explanation" ] [ text (explain model.mode) ]
         , viewRun model.run
         ]
@@ -280,7 +294,7 @@ explain mode =
             "Comme le givre ou le corail : des copies du polycube, tournées au hasard, arrivent de loin en errant case par case et se collent là où elles touchent l'amas pour la première fois. Les pointes attrapent les arrivants avant les creux, d'où les branches. Les couleurs suivent l'ordre d'arrivée : rouge pour les premiers, violet pour les derniers."
 
         Life ->
-            "Un jeu de la vie dont la cellule est un polycube entier. À chaque génération, tous en même temps : un polycube meurt si plus de deux autres le touchent ; un polycube sur deux fait naître un enfant là où il touchera un ou deux vivants. L'enfant a la forme du parent, sauf une fois sur cinq où un cube est déplacé. Une couleur par forme : on voit lesquelles envahissent le monde, un cube de 11 cases de côté, et lesquelles disparaissent."
+            "Un jeu de la vie dont la cellule est un polycube entier. À chaque génération, tous en même temps : un polycube meurt si plus de deux autres le touchent ; un polycube sur deux fait naître un enfant là où il touchera un ou deux vivants. L'enfant a la forme du parent, sauf une fois sur cinq où un cube est déplacé. Une couleur par forme : on voit lesquelles envahissent le monde, un cube dont on choisit le côté, et lesquelles disparaissent."
 
         Mutation ->
             "À chaque génération, un polycube sur deux tente de bourgeonner : l'enfant est le parent avec un cube déplacé, tourné au hasard, et naît contre lui sans toucher aucun autre. Les formes dérivent le long des branches ; chaque enfant prend une couleur proche de celle de son parent."

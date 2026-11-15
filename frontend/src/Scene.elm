@@ -84,13 +84,19 @@ colouringAttributes colouring =
             [ copySizeAttribute cellsPerCopy, encodedIntsAttribute "copy-parents" parentOfCopy ]
 
         ByIdentity cellsPerCopy identities shapes ->
-            [ copySizeAttribute cellsPerCopy
-            , encodedIntsAttribute "copy-ids" identities
-            , encodedIntsAttribute "copy-shapes" shapes
+            (if cellsPerCopy * List.length identities > largestCellCountDrawnOneByOne then
+                [ Attr.attribute "crowd" "" ]
 
-            -- Polycubes come and go too fast for cubes to grow into place.
-            , Attr.attribute "instant" ""
-            ]
+             else
+                []
+            )
+                ++ [ copySizeAttribute cellsPerCopy
+                   , encodedIntsAttribute "copy-ids" identities
+                   , encodedIntsAttribute "copy-shapes" shapes
+
+                   -- Polycubes come and go too fast for cubes to grow into place.
+                   , Attr.attribute "instant" ""
+                   ]
 
         ByAge largestCellCount ->
             Attr.attribute "age-span" (String.fromInt largestCellCount)
@@ -107,7 +113,7 @@ their edges: a mesh per cube would bring the view to a halt.
 -}
 largestCellCountDrawnOneByOne : Int
 largestCellCountDrawnOneByOne =
-    1500
+    1000
 
 
 copySizeAttribute : Int -> Html.Attribute msg
