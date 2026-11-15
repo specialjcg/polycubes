@@ -45,9 +45,18 @@ top = dimension_axes.get_ylim()[1]
 references = [(1.82, "Suie\n1,82", "left"), (2.50, "Référence\n2,50", "left"), (2.70, "Brocoli\n≈ 2,7", "low"), (2.80, "Chou-fleur\n≈ 2,8", "left"), (3.00, "Boule\npleine 3", "left")]
 for value, name, side in references:
     dimension_axes.axvline(value, color=SECONDARY, linewidth=1, linestyle=(0, (4, 3)))
-    # The broccoli label sits a row below, between two close neighbours.
-    height = top * (0.97 if side == "low" else 1.15)
-    dimension_axes.text(value + 0.012, height, name, color=SECONDARY, fontsize=9.5, va="top", ha="left")
+    # The broccoli label sits a row below and left of its line: the next
+    # line stands too close on the right, and the row above is taken.
+    is_low = side == "low"
+    dimension_axes.text(
+        value + (-0.012 if is_low else 0.012),
+        top * (0.97 if is_low else 1.15),
+        name,
+        color=SECONDARY,
+        fontsize=9.5,
+        va="top",
+        ha="right" if is_low else "left",
+    )
 dimension_axes.set_ylim(0, top * 1.18)
 dimension_axes.set_xlim(1.5, 3.25)
 dimension_axes.set_xlabel("Dimension fractale de l'agrégat")
