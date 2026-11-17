@@ -1,0 +1,249 @@
+use std::collections::{BTreeSet, HashSet};
+
+use polycubes_automaton::{
+    ConwayRule, DOMINO, DOMINO_GLIDER, LivingPolycube, Soup, Torus, play_conway, soup,
+};
+use polycubes_core::Coordinates;
+
+const RULE: ConwayRule = ConwayRule {
+    fewest_neighbours_to_survive: 2,
+    most_neighbours_to_survive: 3,
+    fewest_neighbours_to_be_born: 2,
+    most_neighbours_to_be_born: 2,
+    fewest_faces_shared_to_be_born: 2,
+};
+
+const TORUS: Torus = Torus { side: 31 };
+
+/// The glider takes that many generations to come back as it was.
+const GLIDER_PERIOD: usize = 10;
+
+/// How far the glider stands from where it was after one period.
+const GLIDER_SHIFT: Coordinates = [-5, 5, 0];
+
+fn wrapped(cell: Coordinates) -> Coordinates {
+    cell.map(|coordinate| coordinate.rem_euclid(TORUS.side))
+}
+
+fn moved(polycubes: &[Vec<Coordinates>], shift: Coordinates) -> Vec<Vec<Coordinates>> {
+    polycubes
+        .iter()
+        .map(|cells| {
+            cells
+                .iter()
+                .map(|cell| wrapped([0, 1, 2].map(|axis| cell[axis] + shift[axis])))
+                .collect()
+        })
+        .collect()
+}
+
+/// The polycubes of a generation, whatever order and identities they have.
+fn layout(
+    polycubes: impl IntoIterator<Item = Vec<Coordinates>>,
+) -> BTreeSet<BTreeSet<Coordinates>> {
+    polycubes
+        .into_iter()
+        .map(|cells| cells.into_iter().collect())
+        .collect()
+}
+
+fn layout_of(generation: &[LivingPolycube]) -> BTreeSet<BTreeSet<Coordinates>> {
+    layout(generation.iter().map(|polycube| polycube.cells.clone()))
+}
+
+fn glider_at(shift: Coordinates) -> Vec<Vec<Coordinates>> {
+    let glider: Vec<Vec<Coordinates>> = DOMINO_GLIDER.iter().map(|cells| cells.to_vec()).collect();
+    moved(&glider, shift)
+}
+
+fn touch(cell: Coordinates, other: Coordinates) -> bool {
+    let gaps = [0, 1, 2].map(|axis| (cell[axis] - other[axis]).rem_euclid(TORUS.side));
+    let steps: i32 = gaps.iter().map(|&gap| gap.min(TORUS.side - gap)).sum();
+    steps == 1
+}
+
+fn faces_shared(cells: &[Coordinates], others: &[Coordinates]) -> usize {
+    cells
+        .iter()
+        .map(|&cell| others.iter().filter(|&&other| touch(cell, other)).count())
+        .sum()
+}
+
+/// Choices that look random but are the same at every run.
+fn varied_choice() -> impl FnMut(usize) -> usize {
+    let mut state: u64 = 0x2545_f491_4f6c_dd1d;
+    move |choice_count| {
+        state = state
+            .wrapping_mul(6_364_136_223_846_793_005)
+            .wrapping_add(1_442_695_040_888_963_407);
+        usize::try_from(state >> 33).expect("31 bits fit") % choice_count
+    }
+}
+
+fn soup_start() -> Vec<Vec<Coordinates>> {
+    soup(
+        &DOMINO,
+        Soup {
+            side: 8,
+            attempt_count: 40,
+        },
+        varied_choice(),
+    )
+}
+
+/// A soup, which mostly settles, and a glider, which never stops giving birth.
+fn played_starts() -> Vec<Vec<Vec<LivingPolycube>>> {
+    [soup_start(), glider_at([15, 15, 15])]
+        .iter()
+        .map(|start| play_conway(start, RULE, TORUS, 30))
+        .collect()
+}
+
+#[test]
+fn the_glider_comes_back_moved_along_a_diagonal_after_a_period() {
+    let start = glider_at([15, 15, 15]);
+
+    let generations = play_conway(&start, RULE, TORUS, GLIDER_PERIOD);
+
+    assert_eq!(generations.len(), GLIDER_PERIOD + 1);
+    assert_eq!(
+        layout_of(&generations[GLIDER_PERIOD]),
+        layout(moved(&start, GLIDER_SHIFT))
+    );
+}
+
+#[test]
+fn a_glider_leaving_the_torus_comes_back_on_the_other_side() {
+    let start = glider_at([1, TORUS.side - 5, 4]);
+
+    let generations = play_conway(&start, RULE, TORUS, 2 * GLIDER_PERIOD);
+
+    let twice_shifted = GLIDER_SHIFT.map(|step| 2 * step);
+    assert_eq!(
+        layout_of(&generations[2 * GLIDER_PERIOD]),
+        layout(moved(&start, twice_shifted))
+    );
+}
+
+#[test]
+fn a_lone_polycube_dies_of_isolation() {
+    let generations = play_conway(&[DOMINO.to_vec()], RULE, TORUS, 1);
+
+    assert!(generations[1].is_empty());
+}
+
+#[test]
+fn a_turned_start_plays_the_same_game_turned() {
+    let quarter_turn = |[x, y, z]: Coordinates| wrapped([x, -z, y]);
+    let start = soup_start();
+    let turned_start: Vec<Vec<Coordinates>> = start
+        .iter()
+        .map(|cells| cells.iter().copied().map(quarter_turn).collect())
+        .collect();
+
+    let played = play_conway(&start, RULE, TORUS, 12);
+    let turned_played = play_conway(&turned_start, RULE, TORUS, 12);
+
+    for (generation, turned_generation) in played.iter().zip(&turned_played) {
+        let turned_layout = layout(
+            generation
+                .iter()
+                .map(|polycube| polycube.cells.iter().copied().map(quarter_turn).collect()),
+        );
+        assert_eq!(layout_of(turned_generation), turned_layout);
+    }
+}
+
+#[test]
+fn a_polycube_lives_on_while_two_or_three_lean_on_it() {
+    for pair in played_starts()
+        .iter()
+        .flat_map(|generations| generations.windows(2))
+    {
+        let (before, after) = (&pair[0], &pair[1]);
+        for polycube in before {
+            let neighbour_count = before
+                .iter()
+                .filter(|other| {
+                    other.identity != polycube.identity
+                        && faces_shared(&polycube.cells, &other.cells) > 0
+                })
+                .count();
+            assert_eq!(
+                after.contains(polycube),
+                (2..=3).contains(&neighbour_count),
+                "polycube {}",
+                polycube.identity
+            );
+        }
+    }
+}
+
+#[test]
+fn a_polycube_is_born_snug_against_exactly_two_and_apart_from_other_newborns() {
+    let mut birth_count = 0;
+    for pair in played_starts()
+        .iter()
+        .flat_map(|generations| generations.windows(2))
+    {
+        let (before, after) = (&pair[0], &pair[1]);
+        let known: HashSet<usize> = before.iter().map(|polycube| polycube.identity).collect();
+        let newborns: Vec<&LivingPolycube> = after
+            .iter()
+            .filter(|polycube| !known.contains(&polycube.identity))
+            .collect();
+        for newborn in &newborns {
+            let leant_on: Vec<&LivingPolycube> = before
+                .iter()
+                .filter(|elder| faces_shared(&newborn.cells, &elder.cells) > 0)
+                .collect();
+            let shared: usize = leant_on
+                .iter()
+                .map(|elder| faces_shared(&newborn.cells, &elder.cells))
+                .sum();
+            assert_eq!(leant_on.len(), 2, "polycube {}", newborn.identity);
+            assert!(shared >= 2, "polycube {}", newborn.identity);
+            for other in &newborns {
+                if other.identity != newborn.identity {
+                    assert_eq!(faces_shared(&newborn.cells, &other.cells), 0);
+                }
+            }
+        }
+        birth_count += newborns.len();
+    }
+    assert!(birth_count > 0, "nothing was ever born");
+}
+
+#[test]
+fn no_cell_is_taken_twice_and_all_stay_on_the_torus() {
+    for generation in played_starts().into_iter().flatten() {
+        let cells: Vec<Coordinates> = generation
+            .iter()
+            .flat_map(|polycube| polycube.cells.iter().copied())
+            .collect();
+        let distinct: HashSet<&Coordinates> = cells.iter().collect();
+        assert_eq!(distinct.len(), cells.len());
+        assert!(
+            cells
+                .iter()
+                .flatten()
+                .all(|coordinate| (0..TORUS.side).contains(coordinate))
+        );
+    }
+}
+
+#[test]
+fn a_soup_is_whole_dominoes_apart_inside_its_box() {
+    let start = soup_start();
+
+    assert!(start.len() > 10, "only {} dominoes", start.len());
+    let mut taken = HashSet::new();
+    for cells in &start {
+        assert_eq!(cells.len(), DOMINO.len());
+        assert_eq!(faces_shared(&cells[..1], &cells[1..]), 1);
+        for cell in cells {
+            assert!(cell.iter().all(|coordinate| (0..8).contains(coordinate)));
+            assert!(taken.insert(*cell), "two dominoes overlap");
+        }
+    }
+}
