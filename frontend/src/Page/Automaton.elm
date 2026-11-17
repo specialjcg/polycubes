@@ -1,10 +1,11 @@
 module Page.Automaton exposing (Model, Msg, init, start, subscriptions, update, view)
 
-{-| A polycube that grows generation after generation, in one of four ways.
+{-| A polycube that grows generation after generation, in one of five ways.
 By aggregation, copies of it wander in from afar and stick where they touch.
 By mutation, it bears buds that are itself with one cell moved. By budding,
 it bears turned copies of itself against it, which bud in turn. As a game of
 life, whole polycubes die of crowding while others are born beside them.
+Played after Conway's, with dominoes, the game gives rise to gliders.
 -}
 
 import Backend exposing (AutomatonRun)
@@ -29,12 +30,16 @@ initialCellCount =
     5
 
 
-{-| Life plays some two hundred generations, the others a few dozen.
+{-| Life and gliders play some two hundred generations, the others a few
+dozen.
 -}
 millisecondsBetweenGenerations : Mode -> Float
 millisecondsBetweenGenerations mode =
     case mode of
         Life ->
+            250
+
+        Gliders ->
             250
 
         _ ->
@@ -59,6 +64,12 @@ type Mode
     | Life
     | Mutation
     | Budding
+    | Gliders
+
+
+type ConwayStart
+    = SoupStart
+    | GliderStart
 
 
 type alias Model =
@@ -67,6 +78,7 @@ type alias Model =
     , mode : Mode
     , aggregateCellCount : Int
     , lifeWorldReach : Int
+    , conwayStart : ConwayStart
     , run : Run
     , isPlaying : Bool
     }
@@ -96,6 +108,7 @@ type Msg
     | ModeChosen Mode
     | AggregateCellCountChosen Int
     | LifeWorldReachChosen Int
+    | ConwayStartChosen ConwayStart
     | RunRequested
     | PlaybackToggled
     | RunFinished (Result String AutomatonRun)
@@ -109,6 +122,7 @@ init =
     , mode = Aggregation
     , aggregateCellCount = 600
     , lifeWorldReach = 5
+    , conwayStart = SoupStart
     , run = Running
     , isPlaying = True
     }
@@ -130,8 +144,21 @@ requestRun model =
         , mode = modeName model.mode
         , aggregateCellCount = model.aggregateCellCount
         , lifeWorldReach = model.lifeWorldReach
+        , conwayStart = conwayStartName model.conwayStart
         }
     )
+
+
+{-| Names of the backend's `ConwayStart`.
+-}
+conwayStartName : ConwayStart -> String
+conwayStartName conwayStart =
+    case conwayStart of
+        SoupStart ->
+            "soup"
+
+        GliderStart ->
+            "glider"
 
 
 {-| Names of the backend's `SeedKind`.
@@ -166,6 +193,9 @@ modeName mode =
         Budding ->
             "budding"
 
+        Gliders ->
+            "gliders"
+
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
@@ -186,6 +216,9 @@ update msg model =
         LifeWorldReachChosen lifeWorldReach ->
             requestRun { model | lifeWorldReach = lifeWorldReach }
 
+        ConwayStartChosen conwayStart ->
+            requestRun { model | conwayStart = conwayStart }
+
         RunRequested ->
             requestRun model
 
@@ -199,7 +232,7 @@ update msg model =
                         { run = run
                         , elapsedGenerations = 0
                         , mode = model.mode
-                        , seedCellCount = model.cellCount
+                        , seedCellCount = polycubeCellCount model
                         }
               }
             , Cmd.none
@@ -247,7 +280,11 @@ view : Model -> Html Msg
 view model =
     div []
         [ div [ Attr.class "controls" ]
-            [ CellCountSlider.view largestSeedCellCount CellCountChosen model.cellCount
+            [ if model.mode == Gliders then
+                text ""
+
+              else
+                CellCountSlider.view largestSeedCellCount CellCountChosen model.cellCount
             , button [ onClick RunRequested ] [ text "Recommencer" ]
             , button [ onClick PlaybackToggled ]
                 [ text
@@ -259,14 +296,18 @@ view model =
                     )
                 ]
             ]
-        , viewChoice "Graine"
-            SeedKindChosen
-            model.seedKind
-            [ ( Uniform, "Tirage uniforme" ), ( Growth, "Croissance par voisin" ), ( MostLooped, "La plus bouclée" ) ]
+        , if model.mode == Gliders then
+            text ""
+
+          else
+            viewChoice "Graine"
+                SeedKindChosen
+                model.seedKind
+                [ ( Uniform, "Tirage uniforme" ), ( Growth, "Croissance par voisin" ), ( MostLooped, "La plus bouclée" ) ]
         , viewChoice "Croissance"
             ModeChosen
             model.mode
-            [ ( Aggregation, "Agrégation" ), ( Life, "Vie" ), ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ) ]
+            [ ( Aggregation, "Agrégation" ), ( Life, "Vie" ), ( Mutation, "Mutation" ), ( Budding, "Bourgeonnement" ), ( Gliders, "Planeurs" ) ]
         , case model.mode of
             Aggregation ->
                 viewChoice "Taille"
@@ -279,6 +320,12 @@ view model =
                     LifeWorldReachChosen
                     model.lifeWorldReach
                     [ ( 5, "11 cases de côté (≈ 6 s)" ), ( 7, "15 cases (≈ 13 s)" ), ( 10, "21 cases (≈ 45 s)" ) ]
+
+            Gliders ->
+                viewChoice "Départ"
+                    ConwayStartChosen
+                    model.conwayStart
+                    [ ( SoupStart, "Soupe de dominos" ), ( GliderStart, "Un planeur seul" ) ]
 
             _ ->
                 text ""
@@ -301,6 +348,9 @@ explain mode =
 
         Budding ->
             "À chaque génération, un polycube sur deux tente de bourgeonner : une copie de lui-même, tournée au hasard mais jamais en miroir, naît contre lui là où la place est libre. Chaque copie a sa couleur et bourgeonne à son tour."
+
+        Gliders ->
+            "Un jeu de la vie à la Conway, dont la cellule est un domino. Personne ne bourgeonne et rien n'est tiré au hasard : un domino meurt si moins de deux ou plus de trois autres le touchent ; un domino naît là où il s'emboîte contre exactement deux vivants, sauf si une autre naissance le chevaucherait ou le toucherait. Quatre dominos forment un planeur : toutes les dix générations, il revient tel quel, cinq cases plus loin en diagonale. Le monde est un tore de 31 cases : ce qui sort d'un côté revient de l'autre. Une couleur par domino : un planeur change de couleurs car ses dominos meurent et renaissent sans cesse."
 
 
 viewChoice : String -> (choice -> Msg) -> choice -> List ( choice, String ) -> Html Msg
@@ -350,7 +400,12 @@ viewRun run =
                             ++ " polycubes, "
                             ++ String.fromInt (List.length living)
                             ++ " cellules"
-                            ++ describeShapes (at shownGeneration played.run.shapesByGeneration)
+                            ++ (if played.mode == Gliders then
+                                    ""
+
+                                else
+                                    describeShapes (at shownGeneration played.run.shapesByGeneration)
+                               )
                         )
                     ]
                 ]
@@ -387,10 +442,21 @@ at index lists =
     List.drop index lists |> List.head |> Maybe.withDefault []
 
 
+{-| Cells of each polycube of the run asked for: dominoes for gliders.
+-}
+polycubeCellCount : Model -> Int
+polycubeCellCount model =
+    if model.mode == Gliders then
+        2
+
+    else
+        model.cellCount
+
+
 {-| An aggregate lists its cells in the order they came, so they are
 coloured by age. Life tells its polycubes apart generation by generation, so
 that each stays in place while others die, and colours them by shape. Mutants take after their
-parent. Buds are all alike, one colour each.
+parent. Buds are all alike, one colour each. Gliders are coloured domino by domino.
 -}
 colouringOf : Played -> Int -> Scene.Colouring
 colouringOf played shownGeneration =
@@ -408,3 +474,9 @@ colouringOf played shownGeneration =
 
         Budding ->
             Scene.ByCopy played.seedCellCount
+
+        Gliders ->
+            -- Without shapes, each domino is coloured after its identity.
+            Scene.ByIdentity played.seedCellCount
+                (at shownGeneration played.run.identitiesByGeneration)
+                []

@@ -13,7 +13,7 @@ pub mod remarkable;
 
 use std::sync::Mutex;
 
-use automaton::{AutomatonRun, GrowthMode, SeedKind};
+use automaton::{AutomatonRun, ConwayStart, GrowthMode, SeedKind};
 use closed_form::ClosedFormComparison;
 use drawing::{CellCount, DrawnPolycube, PolycubeDrawer};
 use enumeration::TracedStep;
@@ -144,6 +144,7 @@ fn run_automaton(
     mode: GrowthMode,
     aggregate_cell_count: usize,
     life_world_reach: i32,
+    conway_start: ConwayStart,
     drawer: tauri::State<'_, Mutex<PolycubeDrawer>>,
 ) -> Result<AutomatonRun, String> {
     automaton::check_seed_cell_count(cell_count).map_err(|error| error.to_string())?;
@@ -160,6 +161,7 @@ fn run_automaton(
         GrowthMode::Mutation => automaton::bud_mutants(&seed, buds, choose),
         GrowthMode::Budding => automaton::bud(&seed, buds, choose),
         GrowthMode::Life => automaton::live(&seed, life_world_reach, buds, choose),
+        GrowthMode::Gliders => automaton::play_gliders(conway_start, choose),
     })
 }
 
