@@ -1,7 +1,8 @@
 use std::collections::{BTreeSet, HashSet};
 
 use polycubes_automaton::{
-    ConwayRule, DOMINO, DOMINO_GLIDER, LivingPolycube, Soup, Torus, play_conway, soup,
+    ConwayRule, DOMINO, DOMINO_GLIDER, LivingPolycube, SCREW_GLIDER, SQUARE_GLIDER, Soup, Torus,
+    play_conway, soup,
 };
 use polycubes_core::Coordinates;
 
@@ -87,16 +88,49 @@ fn played_starts() -> Vec<Vec<Vec<LivingPolycube>>> {
 }
 
 #[test]
-fn the_glider_comes_back_moved_along_a_diagonal_after_a_period() {
-    let start = glider_at([15, 15, 15]);
+fn every_glider_comes_back_moved_after_its_period() {
+    for glider in [DOMINO_GLIDER, SQUARE_GLIDER, SCREW_GLIDER] {
+        let start = moved(&glider.start(), [15, 15, 15]);
 
-    let generations = play_conway(&start, RULE, TORUS, DOMINO_GLIDER.period);
+        let generations = play_conway(&start, glider.rule, TORUS, glider.period);
 
-    assert_eq!(generations.len(), DOMINO_GLIDER.period + 1);
-    assert_eq!(
-        layout_of(&generations[DOMINO_GLIDER.period]),
-        layout(moved(&start, DOMINO_GLIDER.shift))
+        assert_eq!(
+            layout_of(&generations[glider.period]),
+            layout(moved(&start, glider.shift)),
+            "{glider:?}"
+        );
+    }
+}
+
+/// Number of layers the cells spread over along each axis.
+fn layer_counts(polycubes: &[Vec<Coordinates>]) -> [usize; 3] {
+    [0, 1, 2].map(|axis| {
+        polycubes
+            .iter()
+            .flatten()
+            .map(|cell| cell[axis])
+            .collect::<BTreeSet<i32>>()
+            .len()
+    })
+}
+
+#[test]
+fn the_square_glider_is_a_solid_flying_along_a_diagonal_of_the_cube() {
+    assert!(
+        layer_counts(&SQUARE_GLIDER.start())
+            .iter()
+            .all(|&count| count >= 3)
     );
+    assert!(SQUARE_GLIDER.shift.iter().all(|&step| step != 0));
+}
+
+#[test]
+fn the_screw_glider_moves_one_cell_a_generation_along_an_axis() {
+    let moved_axes = SCREW_GLIDER.shift.iter().filter(|&&step| step != 0).count();
+    let distance: i32 = SCREW_GLIDER.shift.iter().map(|step| step.abs()).sum();
+
+    assert_eq!(moved_axes, 1);
+    assert_eq!(usize::try_from(distance), Ok(SCREW_GLIDER.period));
 }
 
 #[test]

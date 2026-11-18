@@ -81,6 +81,50 @@ pub const DOMINO_GLIDER: Glider = Glider {
     shift: [-5, 5, 0],
 };
 
+/// Six 2×2 squares, standing every way, that fly along a diagonal of the
+/// cube: nineteen cells along each axis every 57 generations. Unlike the
+/// domino glider it is no flat pattern: it spreads over three layers or
+/// more along every axis. Found by `examples/glider_search.rs`.
+pub const SQUARE_GLIDER: Glider = Glider {
+    polycubes: &[
+        &[[0, 1, 1], [0, 1, 2], [1, 1, 1], [1, 1, 2]],
+        &[[0, 2, 1], [0, 3, 1], [1, 2, 1], [1, 3, 1]],
+        &[[1, 0, 0], [1, 0, 1], [2, 0, 0], [2, 0, 1]],
+        &[[1, 1, 0], [1, 2, 0], [2, 1, 0], [2, 2, 0]],
+        &[[1, 2, 2], [1, 2, 3], [1, 3, 2], [1, 3, 3]],
+        &[[2, 1, 1], [2, 1, 2], [2, 2, 1], [2, 2, 2]],
+    ],
+    rule: ConwayRule {
+        fewest_neighbours_to_survive: 2,
+        most_neighbours_to_survive: 4,
+        fewest_neighbours_to_be_born: 3,
+        most_neighbours_to_be_born: 3,
+        fewest_faces_shared_to_be_born: 4,
+    },
+    period: 57,
+    shift: [19, -19, -19],
+};
+
+/// Three screws, the tetracube that differs from its mirror image, that
+/// run straight along an axis at one cell a generation, in a tube two
+/// cells across. Found by `examples/glider_search.rs`.
+pub const SCREW_GLIDER: Glider = Glider {
+    polycubes: &[
+        &[[0, 1, 0], [1, 0, 1], [1, 1, 0], [1, 1, 1]],
+        &[[1, 0, 0], [2, 0, 0], [2, 1, 0], [2, 1, 1]],
+        &[[2, 0, 1], [3, 0, 0], [3, 0, 1], [3, 1, 0]],
+    ],
+    rule: ConwayRule {
+        fewest_neighbours_to_survive: 1,
+        most_neighbours_to_survive: 2,
+        fewest_neighbours_to_be_born: 2,
+        most_neighbours_to_be_born: 2,
+        fewest_faces_shared_to_be_born: 5,
+    },
+    period: 12,
+    shift: [-12, 0, 0],
+};
+
 /// Plays `generation_count` generations from `start` and returns them all,
 /// `start` first.
 ///
