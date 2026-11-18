@@ -12,7 +12,9 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 
-use polycubes_automaton::{ConwayRule, LivingPolycube, Soup, Torus, play_conway, soup};
+use polycubes_automaton::{
+    ConwayRule, LivingPolycube, Soup, Torus, moved_to_origin, play_conway, seeded_choice, soup,
+};
 use polycubes_core::Coordinates;
 use rayon::prelude::*;
 
@@ -38,33 +40,6 @@ const SHAPES: [(&str, &[Coordinates]); 3] = [
 const SURVIVALS: [(usize, usize); 4] = [(1, 2), (1, 3), (2, 3), (2, 4)];
 const BIRTHS: [(usize, usize); 4] = [(1, 1), (2, 2), (3, 3), (2, 3)];
 const FACES_SHARED: [usize; 4] = [2, 3, 4, 5];
-
-/// The living with their lowest corner at the origin, sorted, and where that
-/// corner stood.
-fn moved_to_origin(living: &[LivingPolycube]) -> (Vec<Vec<Coordinates>>, Coordinates) {
-    let lowest_corner = [0, 1, 2].map(|axis| {
-        living
-            .iter()
-            .flat_map(|polycube| &polycube.cells)
-            .map(|cell| cell[axis])
-            .min()
-            .unwrap_or(0)
-    });
-    let mut layout: Vec<Vec<Coordinates>> = living
-        .iter()
-        .map(|polycube| {
-            let mut cells: Vec<Coordinates> = polycube
-                .cells
-                .iter()
-                .map(|cell| [0, 1, 2].map(|axis| cell[axis] - lowest_corner[axis]))
-                .collect();
-            cells.sort_unstable();
-            cells
-        })
-        .collect();
-    layout.sort_unstable();
-    (layout, lowest_corner)
-}
 
 /// How a game ended: its name, its period, how far it moved per period and
 /// its largest population.
@@ -107,21 +82,10 @@ fn ending_of(generations: &[Vec<LivingPolycube>]) -> Ending {
     ending("runs", 0, [0; 3])
 }
 
-/// Choices that look random but are the same at every run of a soup.
-fn seeded_choice(soup_seed: u64) -> impl FnMut(usize) -> usize {
-    let mut state = soup_seed.wrapping_mul(0x9e37_79b9_7f4a_7c15);
-    move |choice_count| {
-        state = state
-            .wrapping_mul(6_364_136_223_846_793_005)
-            .wrapping_add(1_442_695_040_888_963_407);
-        usize::try_from(state >> 33).expect("31 bits fit") % choice_count
-    }
-}
-
 /// The soup moved to the middle of the torus.
 fn centred_soup(shape: &[Coordinates], soup_seed: u64) -> Vec<Vec<Coordinates>> {
     let middle = TORUS.side / 2;
-    soup(shape, SOUP, seeded_choice(soup_seed))
+    soup(shape, SOUP, seeded_choice(soup_seed, 0))
         .into_iter()
         .map(|cells| {
             cells
