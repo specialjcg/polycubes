@@ -47,3 +47,12 @@ fn seeded_choices_repeat_with_the_seed_and_stay_below_the_count() {
 
     assert!(draw(3) == draw(3) && draw(3) != draw(4) && draw(3).iter().all(|&choice| choice < 5));
 }
+
+#[test]
+fn seeded_choices_follow_the_same_sequence_from_run_to_run() {
+    let mut choose = seeded_choice(3, 7);
+
+    let draws: Vec<usize> = (0..8).map(|_| choose(1000)).collect();
+
+    assert_eq!(draws, [397, 379, 797, 861, 409, 351, 964, 580]);
+}

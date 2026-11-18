@@ -121,3 +121,42 @@ fn symmetry_counts_the_rotations_that_leave_a_pattern_as_it_was() {
         [8, 8, 2]
     );
 }
+
+#[test]
+fn a_canonical_form_is_its_own_canonical_form() {
+    let screw = vec![vec![[0, 0, 0], [1, 0, 0], [1, 1, 0], [1, 1, 1]]];
+
+    let canonical = canonical_form(&screw);
+
+    assert_eq!(canonical_form(&canonical), canonical);
+}
+
+#[test]
+fn a_pattern_as_large_as_the_cap_is_classed_and_a_larger_one_is_not() {
+    let pattern = vec![vec![[0, 0, 0], [1, 0, 0]], vec![[0, 1, 0], [0, 1, 1]]];
+    let watch_capped_at = |population_cap| Watch {
+        population_cap,
+        ..WATCH
+    };
+
+    let classed = [2, 1].map(|cap| classify(&pattern, FROZEN, watch_capped_at(cap)).is_some());
+
+    assert_eq!(classed, [true, false]);
+}
+
+#[test]
+fn the_period_is_counted_from_the_first_return_after_a_transient() {
+    let lone_screw: Vec<Coordinates> = SCREW_GLIDER.polycubes[0]
+        .iter()
+        .map(|&[x, y, z]| [x, y + 20, z + 20])
+        .collect();
+    let mut start = SCREW_GLIDER.start();
+    start.push(lone_screw);
+
+    let classification = classify(&start, SCREW_GLIDER.rule, WATCH);
+
+    assert_eq!(
+        classification.map(|found| (found.nature, found.period)),
+        Some((Nature::Glider, SCREW_GLIDER.period))
+    );
+}
