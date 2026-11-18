@@ -1,8 +1,9 @@
 //! Polycubes that grow generation after generation, for the frontend.
 
 use polycubes_automaton::{
-    PolycubeLifeRule, PolycubeWorld, aggregate, canonical_shape, grow_by_budding,
-    grow_by_mutating_buds, live_as_polycubes,
+    ConwayRule, DOMINO, DOMINO_GLIDER, LivingPolycube, PolycubeLifeRule, PolycubeWorld,
+    SCREW_GLIDER, SQUARE_GLIDER, Soup, THICK_SQUARE_GLIDER, Torus, aggregate, canonical_shape,
+    grow_by_budding, grow_by_mutating_buds, live_as_polycubes, play_conway, soup,
 };
 use polycubes_core::Coordinates;
 use serde::{Deserialize, Serialize};
@@ -48,6 +49,23 @@ const LIFE_GENERATION_COUNT: usize = 200;
 /// seconds and 700 polycubes live at once.
 pub const MAX_LIFE_WORLD_REACH: i32 = 10;
 
+/// Found by sweeping rules over soups of dominoes, with births favouring no
+/// direction: the one where a glider of four dominoes showed up on its own.
+const CONWAY_RULE: ConwayRule = DOMINO_GLIDER.rule;
+
+/// Large enough for a glider to be watched on its way, which takes it 62
+/// generations to cross.
+const CONWAY_TORUS: Torus = Torus { side: 31 };
+
+const CONWAY_GENERATION_COUNT: usize = 200;
+
+/// Poured in the middle of the torus, as densely as the soups where
+/// gliders were found.
+const CONWAY_SOUP: Soup = Soup {
+    side: 16,
+    attempt_count: 320,
+};
+
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
 pub enum AutomatonError {
     #[error("cell count must be between 1 and {MAX_SEED_CELL_COUNT}, got {0}")]
@@ -79,6 +97,24 @@ pub enum GrowthMode {
     Budding,
     /// A game of life whose living unit is a whole polycube.
     Life,
+    /// A game of life after Conway's, with dominoes, where gliders arise.
+    Gliders,
+}
+
+/// What a Conway-like game of dominoes starts from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ConwayStart {
+    /// Dominoes poured at random, from which gliders may or may not arise.
+    Soup,
+    /// Four dominoes gliding in one plane.
+    DominoGlider,
+    /// Six squares flying along a diagonal of the cube, under their own rule.
+    SquareGlider,
+    /// Six squares under the same rule, thicker and quicker to come back.
+    ThickSquareGlider,
+    /// Three screws running along an axis, under their own rule.
+    ScrewGlider,
 }
 
 /// The generations of one seed, the seed first, and the box holding them
@@ -244,33 +280,81 @@ fn live_in(
     choose: impl FnMut(usize) -> usize,
 ) -> AutomatonRun {
     let generations = live_as_polycubes(seed, LIFE_RULE, world, buds, choose);
-    let identities_by_generation = generations
+    AutomatonRun::told_apart(generations)
+}
+
+/// Plays a game of life after Conway's on a torus, framed on the whole
+/// torus: nothing buds, a polycube is born where it fits snugly against the
+/// living and dies when too few or too many lean on it. A soup of dominoes
+/// plays under the rule of the domino glider, each glider under its own.
+/// `choose` stands for the random choices of a soup.
+#[must_use]
+pub fn play_gliders(start: ConwayStart, choose: impl FnMut(usize) -> usize) -> AutomatonRun {
+    play_gliders_for(CONWAY_GENERATION_COUNT, start, choose)
+}
+
+fn play_gliders_for(
+    generation_count: usize,
+    start: ConwayStart,
+    choose: impl FnMut(usize) -> usize,
+) -> AutomatonRun {
+    let middle = (CONWAY_TORUS.side - CONWAY_SOUP.side) / 2;
+    let (start_cells, rule) = match start {
+        ConwayStart::Soup => (soup(&DOMINO, CONWAY_SOUP, choose), CONWAY_RULE),
+        ConwayStart::DominoGlider => (DOMINO_GLIDER.start(), DOMINO_GLIDER.rule),
+        ConwayStart::SquareGlider => (SQUARE_GLIDER.start(), SQUARE_GLIDER.rule),
+        ConwayStart::ThickSquareGlider => (THICK_SQUARE_GLIDER.start(), THICK_SQUARE_GLIDER.rule),
+        ConwayStart::ScrewGlider => (SCREW_GLIDER.start(), SCREW_GLIDER.rule),
+    };
+    let centred: Vec<Vec<Coordinates>> = start_cells
         .iter()
-        .map(|living| living.iter().map(|polycube| polycube.identity).collect())
-        .collect();
-    let mut shape_ranks = ShapeRanks::default();
-    let shapes_by_generation = generations
-        .iter()
-        .map(|living| {
-            living
+        .map(|cells| {
+            cells
                 .iter()
-                .map(|polycube| shape_ranks.rank_of(&polycube.cells))
+                .map(|cell| cell.map(|coordinate| coordinate + middle))
                 .collect()
         })
         .collect();
-    let cells_by_generation = generations
-        .into_iter()
-        .map(|living| {
-            living
-                .into_iter()
-                .flat_map(|polycube| polycube.cells)
-                .collect()
-        })
-        .collect();
+    let generations = play_conway(&centred, rule, CONWAY_TORUS, generation_count);
     AutomatonRun {
-        identities_by_generation,
-        shapes_by_generation,
-        ..AutomatonRun::of(cells_by_generation)
+        lowest_corner: [0, 0, 0],
+        highest_corner: [CONWAY_TORUS.side - 1; 3],
+        ..AutomatonRun::told_apart(generations)
+    }
+}
+
+impl AutomatonRun {
+    /// Generations of polycubes that come and go, each told apart by its
+    /// identity and its shape.
+    fn told_apart(generations: Vec<Vec<LivingPolycube>>) -> Self {
+        let identities_by_generation = generations
+            .iter()
+            .map(|living| living.iter().map(|polycube| polycube.identity).collect())
+            .collect();
+        let mut shape_ranks = ShapeRanks::default();
+        let shapes_by_generation = generations
+            .iter()
+            .map(|living| {
+                living
+                    .iter()
+                    .map(|polycube| shape_ranks.rank_of(&polycube.cells))
+                    .collect()
+            })
+            .collect();
+        let cells_by_generation = generations
+            .into_iter()
+            .map(|living| {
+                living
+                    .into_iter()
+                    .flat_map(|polycube| polycube.cells)
+                    .collect()
+            })
+            .collect();
+        AutomatonRun {
+            identities_by_generation,
+            shapes_by_generation,
+            ..AutomatonRun::of(cells_by_generation)
+        }
     }
 }
 
@@ -404,6 +488,57 @@ mod tests {
             .flatten()
             .collect();
         assert!(last_shapes.len() > 1, "no shape but the seed's");
+    }
+
+    #[test]
+    fn a_glider_glides_round_the_torus_without_end() {
+        // Played briefly: the real game takes a minute unoptimised.
+        let run = play_gliders_for(30, ConwayStart::DominoGlider, varied_choice());
+
+        assert_eq!(run.generations.len(), 31);
+        let polycube_counts: Vec<usize> =
+            run.identities_by_generation.iter().map(Vec::len).collect();
+        assert!(
+            polycube_counts.iter().all(|count| (4..=6).contains(count)),
+            "{polycube_counts:?}"
+        );
+        assert_eq!(run.lowest_corner, [0, 0, 0]);
+        assert_eq!(run.highest_corner, [CONWAY_TORUS.side - 1; 3]);
+    }
+
+    #[test]
+    fn the_square_and_screw_gliders_keep_on_living_as_tetracubes() {
+        for start in [
+            ConwayStart::SquareGlider,
+            ConwayStart::ThickSquareGlider,
+            ConwayStart::ScrewGlider,
+        ] {
+            let run = play_gliders_for(30, start, varied_choice());
+
+            for (cells, identities) in run.generations.iter().zip(&run.identities_by_generation) {
+                assert!(!identities.is_empty(), "{start:?} died out");
+                assert_eq!(cells.len(), identities.len() * 4, "{start:?}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_soup_of_dominoes_is_poured_in_the_middle_of_the_torus() {
+        let run = play_gliders_for(10, ConwayStart::Soup, varied_choice());
+
+        let first = &run.generations[0];
+        assert!(first.len() > 40, "only {} cells", first.len());
+        let (low, high) = (CONWAY_TORUS.side / 4, CONWAY_TORUS.side * 3 / 4);
+        assert!(
+            first
+                .iter()
+                .flatten()
+                .all(|coordinate| (low..=high).contains(coordinate))
+        );
+        for (cells, identities) in run.generations.iter().zip(&run.identities_by_generation) {
+            assert_eq!(cells.len(), identities.len() * DOMINO.len());
+            assert!(identities.is_sorted_by(|earlier, later| earlier < later));
+        }
     }
 
     #[test]

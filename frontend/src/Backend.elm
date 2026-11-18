@@ -2,10 +2,10 @@ port module Backend exposing
     ( AutomatonRun
     , ClosedFormComparison
     , DrawnPolycube
+    , EnumerationStep
     , ExposedFaceHistograms
     , ExtensionSize
     , Gallery
-    , EnumerationStep
     , GrownPolycube
     , GrowthComparison
     , RemarkablePolycubes
@@ -17,8 +17,8 @@ port module Backend exposing
     , enumerationTraceFinished
     , galleryFinished
     , growthComparisonFinished
-    , remarkableFinished
     , ready
+    , remarkableFinished
     , requestAutomatonRun
     , requestClosedFormComparison
     , requestDraw
@@ -380,7 +380,7 @@ port automatonRunFinishedPort : (Decode.Value -> msg) -> Sub msg
 
 
 requestAutomatonRun :
-    { cellCount : Int, seedKind : String, mode : String, aggregateCellCount : Int, lifeWorldReach : Int }
+    { cellCount : Int, seedKind : String, mode : String, aggregateCellCount : Int, lifeWorldReach : Int, conwayStart : String }
     -> Cmd msg
 requestAutomatonRun request =
     requestAutomatonRunPort
@@ -390,6 +390,7 @@ requestAutomatonRun request =
             , ( "mode", Encode.string request.mode )
             , ( "aggregateCellCount", Encode.int request.aggregateCellCount )
             , ( "lifeWorldReach", Encode.int request.lifeWorldReach )
+            , ( "conwayStart", Encode.string request.conwayStart )
             ]
         )
 
