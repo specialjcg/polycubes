@@ -43,14 +43,43 @@ pub struct Soup {
 
 pub const DOMINO: [Coordinates; 2] = [[0, 0, 0], [1, 0, 0]];
 
-/// Four dominoes that, under the rule of the Automaton page, come back as
-/// they were every ten generations, five cells further along a diagonal.
-pub const DOMINO_GLIDER: [[Coordinates; 2]; 4] = [
-    [[0, 0, 0], [0, 1, 0]],
-    [[0, 2, 0], [1, 2, 0]],
-    [[1, 1, 0], [2, 1, 0]],
-    [[2, 0, 0], [3, 0, 0]],
-];
+/// Polycubes that, under `rule`, come back as they were every `period`
+/// generations, moved by `shift`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Glider {
+    pub polycubes: &'static [&'static [Coordinates]],
+    pub rule: ConwayRule,
+    pub period: usize,
+    pub shift: Coordinates,
+}
+
+impl Glider {
+    /// The polycubes of the glider, to start a game from.
+    #[must_use]
+    pub fn start(self) -> Vec<Vec<Coordinates>> {
+        self.polycubes.iter().map(|cells| cells.to_vec()).collect()
+    }
+}
+
+/// Four dominoes in one plane that glide along a diagonal of that plane,
+/// five cells every ten generations.
+pub const DOMINO_GLIDER: Glider = Glider {
+    polycubes: &[
+        &[[0, 0, 0], [0, 1, 0]],
+        &[[0, 2, 0], [1, 2, 0]],
+        &[[1, 1, 0], [2, 1, 0]],
+        &[[2, 0, 0], [3, 0, 0]],
+    ],
+    rule: ConwayRule {
+        fewest_neighbours_to_survive: 2,
+        most_neighbours_to_survive: 3,
+        fewest_neighbours_to_be_born: 2,
+        most_neighbours_to_be_born: 2,
+        fewest_faces_shared_to_be_born: 2,
+    },
+    period: 10,
+    shift: [-5, 5, 0],
+};
 
 /// Plays `generation_count` generations from `start` and returns them all,
 /// `start` first.

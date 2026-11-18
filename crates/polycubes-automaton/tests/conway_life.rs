@@ -5,21 +5,9 @@ use polycubes_automaton::{
 };
 use polycubes_core::Coordinates;
 
-const RULE: ConwayRule = ConwayRule {
-    fewest_neighbours_to_survive: 2,
-    most_neighbours_to_survive: 3,
-    fewest_neighbours_to_be_born: 2,
-    most_neighbours_to_be_born: 2,
-    fewest_faces_shared_to_be_born: 2,
-};
+const RULE: ConwayRule = DOMINO_GLIDER.rule;
 
 const TORUS: Torus = Torus { side: 31 };
-
-/// The glider takes that many generations to come back as it was.
-const GLIDER_PERIOD: usize = 10;
-
-/// How far the glider stands from where it was after one period.
-const GLIDER_SHIFT: Coordinates = [-5, 5, 0];
 
 fn wrapped(cell: Coordinates) -> Coordinates {
     cell.map(|coordinate| coordinate.rem_euclid(TORUS.side))
@@ -52,8 +40,7 @@ fn layout_of(generation: &[LivingPolycube]) -> BTreeSet<BTreeSet<Coordinates>> {
 }
 
 fn glider_at(shift: Coordinates) -> Vec<Vec<Coordinates>> {
-    let glider: Vec<Vec<Coordinates>> = DOMINO_GLIDER.iter().map(|cells| cells.to_vec()).collect();
-    moved(&glider, shift)
+    moved(&DOMINO_GLIDER.start(), shift)
 }
 
 fn touch(cell: Coordinates, other: Coordinates) -> bool {
@@ -103,12 +90,12 @@ fn played_starts() -> Vec<Vec<Vec<LivingPolycube>>> {
 fn the_glider_comes_back_moved_along_a_diagonal_after_a_period() {
     let start = glider_at([15, 15, 15]);
 
-    let generations = play_conway(&start, RULE, TORUS, GLIDER_PERIOD);
+    let generations = play_conway(&start, RULE, TORUS, DOMINO_GLIDER.period);
 
-    assert_eq!(generations.len(), GLIDER_PERIOD + 1);
+    assert_eq!(generations.len(), DOMINO_GLIDER.period + 1);
     assert_eq!(
-        layout_of(&generations[GLIDER_PERIOD]),
-        layout(moved(&start, GLIDER_SHIFT))
+        layout_of(&generations[DOMINO_GLIDER.period]),
+        layout(moved(&start, DOMINO_GLIDER.shift))
     );
 }
 
@@ -116,11 +103,11 @@ fn the_glider_comes_back_moved_along_a_diagonal_after_a_period() {
 fn a_glider_leaving_the_torus_comes_back_on_the_other_side() {
     let start = glider_at([1, TORUS.side - 5, 4]);
 
-    let generations = play_conway(&start, RULE, TORUS, 2 * GLIDER_PERIOD);
+    let generations = play_conway(&start, RULE, TORUS, 2 * DOMINO_GLIDER.period);
 
-    let twice_shifted = GLIDER_SHIFT.map(|step| 2 * step);
+    let twice_shifted = DOMINO_GLIDER.shift.map(|step| 2 * step);
     assert_eq!(
-        layout_of(&generations[2 * GLIDER_PERIOD]),
+        layout_of(&generations[2 * DOMINO_GLIDER.period]),
         layout(moved(&start, twice_shifted))
     );
 }

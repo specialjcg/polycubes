@@ -51,13 +51,7 @@ pub const MAX_LIFE_WORLD_REACH: i32 = 10;
 
 /// Found by sweeping rules over soups of dominoes, with births favouring no
 /// direction: the one where a glider of four dominoes showed up on its own.
-const CONWAY_RULE: ConwayRule = ConwayRule {
-    fewest_neighbours_to_survive: 2,
-    most_neighbours_to_survive: 3,
-    fewest_neighbours_to_be_born: 2,
-    most_neighbours_to_be_born: 2,
-    fewest_faces_shared_to_be_born: 2,
-};
+const CONWAY_RULE: ConwayRule = DOMINO_GLIDER.rule;
 
 /// Large enough for a glider to be watched on its way, which takes it 62
 /// generations to cross.
@@ -300,7 +294,7 @@ fn play_gliders_for(
     let middle = (CONWAY_TORUS.side - CONWAY_SOUP.side) / 2;
     let start_cells: Vec<Vec<Coordinates>> = match start {
         ConwayStart::Soup => soup(&DOMINO, CONWAY_SOUP, choose),
-        ConwayStart::Glider => DOMINO_GLIDER.iter().map(|cells| cells.to_vec()).collect(),
+        ConwayStart::Glider => DOMINO_GLIDER.start(),
     };
     let centred: Vec<Vec<Coordinates>> = start_cells
         .iter()
