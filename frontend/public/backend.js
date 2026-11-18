@@ -33,6 +33,8 @@ const relayedRequests = [
     request: "requestAutomatonRunPort",
     result: "automatonRunFinishedPort",
   },
+  { command: "list_patterns", request: "requestPatternsPort", result: "patternsFinishedPort" },
+  { command: "play_pattern", request: "requestPatternRunPort", result: "patternRunFinishedPort" },
 ];
 
 function relay(command, request, result, toArguments) {

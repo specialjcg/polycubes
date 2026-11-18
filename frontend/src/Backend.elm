@@ -8,6 +8,8 @@ port module Backend exposing
     , Gallery
     , GrownPolycube
     , GrowthComparison
+    , Pattern
+    , PatternRule
     , RemarkablePolycubes
     , RemarkableShape
     , ShapeFamily
@@ -17,6 +19,8 @@ port module Backend exposing
     , enumerationTraceFinished
     , galleryFinished
     , growthComparisonFinished
+    , patternRunFinished
+    , patternsFinished
     , ready
     , remarkableFinished
     , requestAutomatonRun
@@ -25,6 +29,8 @@ port module Backend exposing
     , requestEnumerationTrace
     , requestGallery
     , requestGrowthComparison
+    , requestPatternRun
+    , requestPatterns
     , requestRemarkable
     )
 
@@ -409,3 +415,88 @@ automatonRunDecoder =
         (Decode.field "parentOfCopy" (Decode.list Decode.int))
         (Decode.field "identitiesByGeneration" (Decode.list (Decode.list Decode.int)))
         (Decode.field "shapesByGeneration" (Decode.list (Decode.list Decode.int)))
+
+
+{-| A pattern of the gallery of the Conway-like life, its lowest corner at
+the origin. `nature` is `still`, `oscillator` or `glider`; `symmetry` the
+number of the 24 rotations of the cube that leave it as it was.
+-}
+type alias Pattern =
+    { number : Int
+    , shape : String
+    , nature : String
+    , period : Int
+    , symmetry : Int
+    , rule : PatternRule
+    , polycubes : List (List Cell)
+    }
+
+
+{-| The rule a pattern lives under.
+-}
+type alias PatternRule =
+    { fewestToSurvive : Int
+    , mostToSurvive : Int
+    , fewestToBeBorn : Int
+    , mostToBeBorn : Int
+    , fewestFacesShared : Int
+    }
+
+
+{-| Asks for the patterns of the gallery.
+-}
+port requestPatternsPort : Encode.Value -> Cmd msg
+
+
+port patternsFinishedPort : (Decode.Value -> msg) -> Sub msg
+
+
+requestPatterns : Cmd msg
+requestPatterns =
+    requestPatternsPort (Encode.object [])
+
+
+patternsFinished : (Result String (List Pattern) -> msg) -> Sub msg
+patternsFinished toMsg =
+    patternsFinishedPort (decodeResult (Decode.list patternDecoder) >> toMsg)
+
+
+{-| Asks for the generations of the pattern bearing the given number,
+played under its own rule.
+-}
+port requestPatternRunPort : Encode.Value -> Cmd msg
+
+
+port patternRunFinishedPort : (Decode.Value -> msg) -> Sub msg
+
+
+requestPatternRun : Int -> Cmd msg
+requestPatternRun number =
+    requestPatternRunPort (Encode.object [ ( "number", Encode.int number ) ])
+
+
+patternRunFinished : (Result String AutomatonRun -> msg) -> Sub msg
+patternRunFinished toMsg =
+    patternRunFinishedPort (decodeResult automatonRunDecoder >> toMsg)
+
+
+patternDecoder : Decoder Pattern
+patternDecoder =
+    Decode.map7 Pattern
+        (Decode.field "number" Decode.int)
+        (Decode.field "shape" Decode.string)
+        (Decode.field "nature" Decode.string)
+        (Decode.field "period" Decode.int)
+        (Decode.field "symmetry" Decode.int)
+        (Decode.field "rule" patternRuleDecoder)
+        (Decode.field "polycubes" (Decode.list cellsDecoder))
+
+
+patternRuleDecoder : Decoder PatternRule
+patternRuleDecoder =
+    Decode.map5 PatternRule
+        (Decode.field "fewest_neighbours_to_survive" Decode.int)
+        (Decode.field "most_neighbours_to_survive" Decode.int)
+        (Decode.field "fewest_neighbours_to_be_born" Decode.int)
+        (Decode.field "most_neighbours_to_be_born" Decode.int)
+        (Decode.field "fewest_faces_shared_to_be_born" Decode.int)

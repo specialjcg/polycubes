@@ -326,7 +326,7 @@ fn play_gliders_for(
 impl AutomatonRun {
     /// Generations of polycubes that come and go, each told apart by its
     /// identity and its shape.
-    fn told_apart(generations: Vec<Vec<LivingPolycube>>) -> Self {
+    pub(crate) fn told_apart(generations: Vec<Vec<LivingPolycube>>) -> Self {
         let identities_by_generation = generations
             .iter()
             .map(|living| living.iter().map(|polycube| polycube.identity).collect())

@@ -15,6 +15,7 @@ import Page.Draw
 import Page.Enumeration
 import Page.Gallery
 import Page.Growth
+import Page.Patterns
 import Page.Remarkable
 
 
@@ -25,6 +26,7 @@ type Page
     | GalleryPage
     | RemarkablePage
     | AutomatonPage
+    | PatternsPage
     | DrawPage
 
 
@@ -36,6 +38,7 @@ type alias Model =
     , gallery : Page.Gallery.Model
     , remarkable : Page.Remarkable.Model
     , automaton : Page.Automaton.Model
+    , patterns : Page.Patterns.Model
     , draw : Page.Draw.Model
     }
 
@@ -49,6 +52,7 @@ type Msg
     | GalleryMsg Page.Gallery.Msg
     | RemarkableMsg Page.Remarkable.Msg
     | AutomatonMsg Page.Automaton.Msg
+    | PatternsMsg Page.Patterns.Msg
     | DrawMsg Page.Draw.Msg
 
 
@@ -71,6 +75,7 @@ init =
     , gallery = Page.Gallery.init
     , remarkable = Page.Remarkable.init
     , automaton = Page.Automaton.init
+    , patterns = Page.Patterns.init
     , draw = Page.Draw.init
     }
 
@@ -98,6 +103,9 @@ update msg model =
                 ( automaton, automatonCmd ) =
                     Page.Automaton.start model.automaton
 
+                ( patterns, patternsCmd ) =
+                    Page.Patterns.start model.patterns
+
                 ( draw, drawCmd ) =
                     Page.Draw.start model.draw
             in
@@ -108,6 +116,7 @@ update msg model =
                 , gallery = gallery
                 , remarkable = remarkable
                 , automaton = automaton
+                , patterns = patterns
                 , draw = draw
               }
             , Cmd.batch
@@ -117,6 +126,7 @@ update msg model =
                 , Cmd.map GalleryMsg galleryCmd
                 , Cmd.map RemarkableMsg remarkableCmd
                 , Cmd.map AutomatonMsg automatonCmd
+                , Cmd.map PatternsMsg patternsCmd
                 , Cmd.map DrawMsg drawCmd
                 ]
             )
@@ -166,6 +176,13 @@ update msg model =
             in
             ( { model | automaton = automaton }, Cmd.map AutomatonMsg automatonCmd )
 
+        PatternsMsg patternsMsg ->
+            let
+                ( patterns, patternsCmd ) =
+                    Page.Patterns.update patternsMsg model.patterns
+            in
+            ( { model | patterns = patterns }, Cmd.map PatternsMsg patternsCmd )
+
         DrawMsg drawMsg ->
             let
                 ( draw, drawCmd ) =
@@ -184,6 +201,7 @@ subscriptions model =
         , Sub.map GalleryMsg Page.Gallery.subscriptions
         , Sub.map RemarkableMsg Page.Remarkable.subscriptions
         , Sub.map AutomatonMsg (Page.Automaton.subscriptions model.automaton)
+        , Sub.map PatternsMsg (Page.Patterns.subscriptions model.patterns)
         , Sub.map DrawMsg Page.Draw.subscriptions
         ]
 
@@ -199,6 +217,7 @@ view model =
             , viewPageButton model.shownPage GalleryPage "Galerie"
             , viewPageButton model.shownPage RemarkablePage "Remarquables"
             , viewPageButton model.shownPage AutomatonPage "Automate"
+            , viewPageButton model.shownPage PatternsPage "Motifs"
             , viewPageButton model.shownPage DrawPage "Tirage uniforme"
             ]
         , case model.shownPage of
@@ -219,6 +238,9 @@ view model =
 
             AutomatonPage ->
                 Html.map AutomatonMsg (Page.Automaton.view model.automaton)
+
+            PatternsPage ->
+                Html.map PatternsMsg (Page.Patterns.view model.patterns)
 
             DrawPage ->
                 Html.map DrawMsg (Page.Draw.view model.draw)

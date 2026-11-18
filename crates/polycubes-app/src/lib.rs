@@ -9,6 +9,7 @@ pub mod drawing;
 pub mod enumeration;
 pub mod gallery;
 pub mod growth;
+pub mod patterns;
 pub mod remarkable;
 
 use std::sync::Mutex;
@@ -19,6 +20,7 @@ use drawing::{CellCount, DrawnPolycube, PolycubeDrawer};
 use enumeration::TracedStep;
 use gallery::Gallery;
 use growth::GrowthComparison;
+use patterns::Pattern;
 use polycubes_core::Coordinates;
 use remarkable::RemarkablePolycubes;
 
@@ -165,6 +167,20 @@ fn run_automaton(
     })
 }
 
+/// The patterns of the gallery, each with its own rule.
+#[tauri::command(async)]
+fn list_patterns() -> Result<Vec<Pattern>, String> {
+    patterns::patterns()
+        .map(<[Pattern]>::to_vec)
+        .map_err(|error| error.to_string())
+}
+
+/// Plays the pattern bearing `number` under its own rule.
+#[tauri::command(async)]
+fn play_pattern(number: usize) -> Result<AutomatonRun, String> {
+    patterns::play_pattern(number).map_err(|error| error.to_string())
+}
+
 /// Runs the desktop application until its window is closed.
 ///
 /// # Panics
@@ -180,7 +196,9 @@ pub fn run() {
             compare_closed_form,
             build_gallery,
             find_remarkable,
-            run_automaton
+            run_automaton,
+            list_patterns,
+            play_pattern
         ])
         .run(tauri::generate_context!())
         .expect("the desktop application failed to start");
