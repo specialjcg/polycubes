@@ -1,9 +1,9 @@
 //! Polycubes that grow generation after generation, for the frontend.
 
 use polycubes_automaton::{
-    ConwayRule, DOMINO, DOMINO_GLIDER, LivingPolycube, PolycubeLifeRule, PolycubeWorld, Soup,
-    Torus, aggregate, canonical_shape, grow_by_budding, grow_by_mutating_buds, live_as_polycubes,
-    play_conway, soup,
+    ConwayRule, DOMINO, DOMINO_GLIDER, LivingPolycube, PolycubeLifeRule, PolycubeWorld,
+    SCREW_GLIDER, SQUARE_GLIDER, Soup, Torus, aggregate, canonical_shape, grow_by_budding,
+    grow_by_mutating_buds, live_as_polycubes, play_conway, soup,
 };
 use polycubes_core::Coordinates;
 use serde::{Deserialize, Serialize};
@@ -107,8 +107,12 @@ pub enum GrowthMode {
 pub enum ConwayStart {
     /// Dominoes poured at random, from which gliders may or may not arise.
     Soup,
-    /// One glider alone.
-    Glider,
+    /// Four dominoes gliding in one plane.
+    DominoGlider,
+    /// Six squares flying along a diagonal of the cube, under their own rule.
+    SquareGlider,
+    /// Three screws running along an axis, under their own rule.
+    ScrewGlider,
 }
 
 /// The generations of one seed, the seed first, and the box holding them
@@ -277,9 +281,10 @@ fn live_in(
     AutomatonRun::told_apart(generations)
 }
 
-/// Plays a game of life after Conway's with dominoes on a torus, framed on
-/// the whole torus: no domino buds, one is born where it fits snugly
-/// against exactly two others, one dies unless two or three lean on it.
+/// Plays a game of life after Conway's on a torus, framed on the whole
+/// torus: nothing buds, a polycube is born where it fits snugly against the
+/// living and dies when too few or too many lean on it. A soup of dominoes
+/// plays under the rule of the domino glider, each glider under its own.
 /// `choose` stands for the random choices of a soup.
 #[must_use]
 pub fn play_gliders(start: ConwayStart, choose: impl FnMut(usize) -> usize) -> AutomatonRun {
@@ -292,9 +297,11 @@ fn play_gliders_for(
     choose: impl FnMut(usize) -> usize,
 ) -> AutomatonRun {
     let middle = (CONWAY_TORUS.side - CONWAY_SOUP.side) / 2;
-    let start_cells: Vec<Vec<Coordinates>> = match start {
-        ConwayStart::Soup => soup(&DOMINO, CONWAY_SOUP, choose),
-        ConwayStart::Glider => DOMINO_GLIDER.start(),
+    let (start_cells, rule) = match start {
+        ConwayStart::Soup => (soup(&DOMINO, CONWAY_SOUP, choose), CONWAY_RULE),
+        ConwayStart::DominoGlider => (DOMINO_GLIDER.start(), DOMINO_GLIDER.rule),
+        ConwayStart::SquareGlider => (SQUARE_GLIDER.start(), SQUARE_GLIDER.rule),
+        ConwayStart::ScrewGlider => (SCREW_GLIDER.start(), SCREW_GLIDER.rule),
     };
     let centred: Vec<Vec<Coordinates>> = start_cells
         .iter()
@@ -305,7 +312,7 @@ fn play_gliders_for(
                 .collect()
         })
         .collect();
-    let generations = play_conway(&centred, CONWAY_RULE, CONWAY_TORUS, generation_count);
+    let generations = play_conway(&centred, rule, CONWAY_TORUS, generation_count);
     AutomatonRun {
         lowest_corner: [0, 0, 0],
         highest_corner: [CONWAY_TORUS.side - 1; 3],
@@ -483,7 +490,7 @@ mod tests {
     #[test]
     fn a_glider_glides_round_the_torus_without_end() {
         // Played briefly: the real game takes a minute unoptimised.
-        let run = play_gliders_for(30, ConwayStart::Glider, varied_choice());
+        let run = play_gliders_for(30, ConwayStart::DominoGlider, varied_choice());
 
         assert_eq!(run.generations.len(), 31);
         let polycube_counts: Vec<usize> =
@@ -494,6 +501,18 @@ mod tests {
         );
         assert_eq!(run.lowest_corner, [0, 0, 0]);
         assert_eq!(run.highest_corner, [CONWAY_TORUS.side - 1; 3]);
+    }
+
+    #[test]
+    fn the_square_and_screw_gliders_keep_on_living_as_tetracubes() {
+        for start in [ConwayStart::SquareGlider, ConwayStart::ScrewGlider] {
+            let run = play_gliders_for(30, start, varied_choice());
+
+            for (cells, identities) in run.generations.iter().zip(&run.identities_by_generation) {
+                assert!(!identities.is_empty(), "{start:?} died out");
+                assert_eq!(cells.len(), identities.len() * 4, "{start:?}");
+            }
+        }
     }
 
     #[test]

@@ -69,7 +69,9 @@ type Mode
 
 type ConwayStart
     = SoupStart
-    | GliderStart
+    | DominoGliderStart
+    | SquareGliderStart
+    | ScrewGliderStart
 
 
 type alias Model =
@@ -157,8 +159,14 @@ conwayStartName conwayStart =
         SoupStart ->
             "soup"
 
-        GliderStart ->
-            "glider"
+        DominoGliderStart ->
+            "dominoGlider"
+
+        SquareGliderStart ->
+            "squareGlider"
+
+        ScrewGliderStart ->
+            "screwGlider"
 
 
 {-| Names of the backend's `SeedKind`.
@@ -325,7 +333,11 @@ view model =
                 viewChoice "Départ"
                     ConwayStartChosen
                     model.conwayStart
-                    [ ( SoupStart, "Soupe de dominos" ), ( GliderStart, "Un planeur seul" ) ]
+                    [ ( SoupStart, "Soupe de dominos" )
+                    , ( DominoGliderStart, "Planeur plat (dominos)" )
+                    , ( SquareGliderStart, "Planeur 3D (carrés)" )
+                    , ( ScrewGliderStart, "Planeur rapide (vis)" )
+                    ]
 
             _ ->
                 text ""
@@ -350,7 +362,7 @@ explain mode =
             "À chaque génération, un polycube sur deux tente de bourgeonner : une copie de lui-même, tournée au hasard mais jamais en miroir, naît contre lui là où la place est libre. Chaque copie a sa couleur et bourgeonne à son tour."
 
         Gliders ->
-            "Un jeu de la vie à la Conway, dont la cellule est un domino. Personne ne bourgeonne et rien n'est tiré au hasard : un domino meurt si moins de deux ou plus de trois autres le touchent ; un domino naît là où il s'emboîte contre exactement deux vivants, sauf si une autre naissance le chevaucherait ou le toucherait. Quatre dominos forment un planeur : toutes les dix générations, il revient tel quel, cinq cases plus loin en diagonale. Le monde est un tore de 31 cases : ce qui sort d'un côté revient de l'autre. Une couleur par domino : un planeur change de couleurs car ses dominos meurent et renaissent sans cesse."
+            "Un jeu de la vie à la Conway dont la cellule est un polycube entier. Personne ne bourgeonne et rien n'est tiré au hasard : un polycube meurt si trop peu ou trop d'autres le touchent ; un polycube naît là où il s'emboîte contre le bon nombre de vivants, sauf si une autre naissance le chevaucherait ou le toucherait. Trois planeurs, chacun avec sa règle, reviennent tels quels plus loin : quatre dominos qui glissent dans un plan, cinq cases toutes les dix générations ; six carrés 2×2 qui volent en relief sur la grande diagonale du cube, dix-neuf cases sur chaque axe toutes les 57 générations ; trois vis qui filent tout droit à une case par génération. La soupe de dominos se fige souvent, et lâche un planeur une fois sur deux. Le monde est un tore de 31 cases : ce qui sort d'un côté revient de l'autre. Une couleur par polycube : un planeur change de couleurs car ses pièces meurent et renaissent sans cesse."
 
 
 viewChoice : String -> (choice -> Msg) -> choice -> List ( choice, String ) -> Html Msg
@@ -442,15 +454,23 @@ at index lists =
     List.drop index lists |> List.head |> Maybe.withDefault []
 
 
-{-| Cells of each polycube of the run asked for: dominoes for gliders.
+{-| Cells of each polycube of the run asked for: dominoes for a soup or
+the flat glider, tetracubes for the others.
 -}
 polycubeCellCount : Model -> Int
 polycubeCellCount model =
-    if model.mode == Gliders then
-        2
+    case ( model.mode, model.conwayStart ) of
+        ( Gliders, SoupStart ) ->
+            2
 
-    else
-        model.cellCount
+        ( Gliders, DominoGliderStart ) ->
+            2
+
+        ( Gliders, _ ) ->
+            4
+
+        _ ->
+            model.cellCount
 
 
 {-| An aggregate lists its cells in the order they came, so they are
