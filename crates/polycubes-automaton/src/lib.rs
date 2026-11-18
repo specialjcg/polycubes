@@ -21,6 +21,9 @@ pub use conway_life::{
 };
 pub use evolution::{Evolution, Fate, Limits, evolve, next_generation};
 pub use fractal::growth_dimension;
-pub use pattern::{Layout, is_solid, layers, moved_to_origin, seeded_choice};
+pub use pattern::{
+    Classification, Layout, Nature, Watch, canonical_form, classify, is_solid, layers,
+    moved_to_origin, seeded_choice, symmetry,
+};
 pub use polycube_life::{LivingPolycube, PolycubeLifeRule, PolycubeWorld, live_as_polycubes};
 pub use rule::{Neighbourhood, Rule, RuleError};
