@@ -105,6 +105,24 @@ pub const SQUARE_GLIDER: Glider = Glider {
     shift: [19, -19, -19],
 };
 
+/// Six 2×2 squares under the rule of [`SQUARE_GLIDER`], thicker than it
+/// (three, four and five layers) and coming back every 12 generations
+/// instead of 57, at the same third of a cell a generation along a
+/// diagonal of the cube. Found by `examples/glider_search.rs`.
+pub const THICK_SQUARE_GLIDER: Glider = Glider {
+    polycubes: &[
+        &[[0, 0, 0], [0, 0, 1], [1, 0, 0], [1, 0, 1]],
+        &[[1, 0, 3], [1, 1, 3], [2, 0, 3], [2, 1, 3]],
+        &[[1, 1, 1], [1, 1, 2], [2, 1, 1], [2, 1, 2]],
+        &[[2, 1, 4], [2, 2, 4], [3, 1, 4], [3, 2, 4]],
+        &[[2, 2, 2], [2, 2, 3], [3, 2, 2], [3, 2, 3]],
+        &[[3, 0, 2], [3, 0, 3], [3, 1, 2], [3, 1, 3]],
+    ],
+    rule: SQUARE_GLIDER.rule,
+    period: 12,
+    shift: [4, 4, 4],
+};
+
 /// Three screws, the tetracube that differs from its mirror image, that
 /// run straight along an axis at one cell a generation, in a tube two
 /// cells across. Found by `examples/glider_search.rs`.

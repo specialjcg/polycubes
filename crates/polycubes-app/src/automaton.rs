@@ -2,8 +2,8 @@
 
 use polycubes_automaton::{
     ConwayRule, DOMINO, DOMINO_GLIDER, LivingPolycube, PolycubeLifeRule, PolycubeWorld,
-    SCREW_GLIDER, SQUARE_GLIDER, Soup, Torus, aggregate, canonical_shape, grow_by_budding,
-    grow_by_mutating_buds, live_as_polycubes, play_conway, soup,
+    SCREW_GLIDER, SQUARE_GLIDER, Soup, THICK_SQUARE_GLIDER, Torus, aggregate, canonical_shape,
+    grow_by_budding, grow_by_mutating_buds, live_as_polycubes, play_conway, soup,
 };
 use polycubes_core::Coordinates;
 use serde::{Deserialize, Serialize};
@@ -111,6 +111,8 @@ pub enum ConwayStart {
     DominoGlider,
     /// Six squares flying along a diagonal of the cube, under their own rule.
     SquareGlider,
+    /// Six squares under the same rule, thicker and quicker to come back.
+    ThickSquareGlider,
     /// Three screws running along an axis, under their own rule.
     ScrewGlider,
 }
@@ -301,6 +303,7 @@ fn play_gliders_for(
         ConwayStart::Soup => (soup(&DOMINO, CONWAY_SOUP, choose), CONWAY_RULE),
         ConwayStart::DominoGlider => (DOMINO_GLIDER.start(), DOMINO_GLIDER.rule),
         ConwayStart::SquareGlider => (SQUARE_GLIDER.start(), SQUARE_GLIDER.rule),
+        ConwayStart::ThickSquareGlider => (THICK_SQUARE_GLIDER.start(), THICK_SQUARE_GLIDER.rule),
         ConwayStart::ScrewGlider => (SCREW_GLIDER.start(), SCREW_GLIDER.rule),
     };
     let centred: Vec<Vec<Coordinates>> = start_cells
@@ -505,7 +508,11 @@ mod tests {
 
     #[test]
     fn the_square_and_screw_gliders_keep_on_living_as_tetracubes() {
-        for start in [ConwayStart::SquareGlider, ConwayStart::ScrewGlider] {
+        for start in [
+            ConwayStart::SquareGlider,
+            ConwayStart::ThickSquareGlider,
+            ConwayStart::ScrewGlider,
+        ] {
             let run = play_gliders_for(30, start, varied_choice());
 
             for (cells, identities) in run.generations.iter().zip(&run.identities_by_generation) {

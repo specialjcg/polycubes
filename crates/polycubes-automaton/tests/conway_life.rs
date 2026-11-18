@@ -1,8 +1,8 @@
 use std::collections::{BTreeSet, HashSet};
 
 use polycubes_automaton::{
-    ConwayRule, DOMINO, DOMINO_GLIDER, LivingPolycube, SCREW_GLIDER, SQUARE_GLIDER, Soup, Torus,
-    play_conway, soup,
+    ConwayRule, DOMINO, DOMINO_GLIDER, LivingPolycube, SCREW_GLIDER, SQUARE_GLIDER, Soup,
+    THICK_SQUARE_GLIDER, Torus, play_conway, soup,
 };
 use polycubes_core::Coordinates;
 
@@ -89,7 +89,12 @@ fn played_starts() -> Vec<Vec<Vec<LivingPolycube>>> {
 
 #[test]
 fn every_glider_comes_back_moved_after_its_period() {
-    for glider in [DOMINO_GLIDER, SQUARE_GLIDER, SCREW_GLIDER] {
+    for glider in [
+        DOMINO_GLIDER,
+        SQUARE_GLIDER,
+        THICK_SQUARE_GLIDER,
+        SCREW_GLIDER,
+    ] {
         let start = moved(&glider.start(), [15, 15, 15]);
 
         let generations = play_conway(&start, glider.rule, TORUS, glider.period);
@@ -122,6 +127,23 @@ fn the_square_glider_is_a_solid_flying_along_a_diagonal_of_the_cube() {
             .all(|&count| count >= 3)
     );
     assert!(SQUARE_GLIDER.shift.iter().all(|&step| step != 0));
+}
+
+#[test]
+fn the_thick_square_glider_shares_the_rule_and_speed_of_the_square_glider_in_fewer_generations() {
+    let speed = |glider: polycubes_automaton::Glider| {
+        f64::from(glider.shift[0].abs()) / glider.period as f64
+    };
+
+    assert_eq!(THICK_SQUARE_GLIDER.rule, SQUARE_GLIDER.rule);
+    const { assert!(THICK_SQUARE_GLIDER.period < SQUARE_GLIDER.period) };
+    assert!(THICK_SQUARE_GLIDER.shift.iter().all(|&step| step != 0));
+    assert!((speed(THICK_SQUARE_GLIDER) - speed(SQUARE_GLIDER)).abs() < f64::EPSILON);
+    assert!(
+        layer_counts(&THICK_SQUARE_GLIDER.start())
+            .iter()
+            .all(|&count| count >= 3)
+    );
 }
 
 #[test]

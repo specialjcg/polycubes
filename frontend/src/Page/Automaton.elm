@@ -71,6 +71,7 @@ type ConwayStart
     = SoupStart
     | DominoGliderStart
     | SquareGliderStart
+    | ThickSquareGliderStart
     | ScrewGliderStart
 
 
@@ -164,6 +165,9 @@ conwayStartName conwayStart =
 
         SquareGliderStart ->
             "squareGlider"
+
+        ThickSquareGliderStart ->
+            "thickSquareGlider"
 
         ScrewGliderStart ->
             "screwGlider"
@@ -336,6 +340,7 @@ view model =
                     [ ( SoupStart, "Soupe de dominos" )
                     , ( DominoGliderStart, "Planeur plat (dominos)" )
                     , ( SquareGliderStart, "Planeur 3D (carrés)" )
+                    , ( ThickSquareGliderStart, "Planeur épais (carrés)" )
                     , ( ScrewGliderStart, "Planeur rapide (vis)" )
                     ]
 
@@ -362,7 +367,7 @@ explain mode =
             "À chaque génération, un polycube sur deux tente de bourgeonner : une copie de lui-même, tournée au hasard mais jamais en miroir, naît contre lui là où la place est libre. Chaque copie a sa couleur et bourgeonne à son tour."
 
         Gliders ->
-            "Un jeu de la vie à la Conway dont la cellule est un polycube entier. Personne ne bourgeonne et rien n'est tiré au hasard : un polycube meurt si trop peu ou trop d'autres le touchent ; un polycube naît là où il s'emboîte contre le bon nombre de vivants, sauf si une autre naissance le chevaucherait ou le toucherait. Trois planeurs, chacun avec sa règle, reviennent tels quels plus loin : quatre dominos qui glissent dans un plan, cinq cases toutes les dix générations ; six carrés 2×2 qui volent en relief sur la grande diagonale du cube, dix-neuf cases sur chaque axe toutes les 57 générations ; trois vis qui filent tout droit à une case par génération. La soupe de dominos se fige souvent, et lâche un planeur une fois sur deux. Le monde est un tore de 31 cases : ce qui sort d'un côté revient de l'autre. Une couleur par polycube : un planeur change de couleurs car ses pièces meurent et renaissent sans cesse."
+            "Un jeu de la vie à la Conway dont la cellule est un polycube entier. Personne ne bourgeonne et rien n'est tiré au hasard : un polycube meurt si trop peu ou trop d'autres le touchent ; un polycube naît là où il s'emboîte contre le bon nombre de vivants, sauf si une autre naissance le chevaucherait ou le toucherait. Quatre planeurs, chacun avec sa règle, reviennent tels quels plus loin : quatre dominos qui glissent dans un plan, cinq cases toutes les dix générations ; six carrés 2×2 qui volent en relief sur la grande diagonale du cube, dix-neuf cases sur chaque axe toutes les 57 générations ; sous la même règle, six carrés plus épais, quatre cases sur chaque axe toutes les 12 générations ; trois vis qui filent tout droit à une case par génération. La soupe de dominos se fige souvent, et lâche un planeur une fois sur deux. Le monde est un tore de 31 cases : ce qui sort d'un côté revient de l'autre. Une couleur par polycube : un planeur change de couleurs car ses pièces meurent et renaissent sans cesse."
 
 
 viewChoice : String -> (choice -> Msg) -> choice -> List ( choice, String ) -> Html Msg
