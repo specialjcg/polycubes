@@ -72,6 +72,7 @@ Organisation : workspace Cargo, `crates/polycubes-core` (énumération), `crates
   - **Bourgeonnement** : le polycube entier est la cellule. À chaque génération un polycube sur deux tente de faire naître contre lui une copie de lui-même, tournée au hasard mais jamais en miroir, là où aucune case n'est prise et où elle ne touche aucune autre copie ; 16 générations, 1 000 cellules au plus. Chaque copie a sa couleur.
 
   Le crate sait aussi jouer les règles du type « jeu de la vie » (6 ou 26 voisines, `Rule`, `evolve`, `census`) : elles ont été retirées de la page, car partant de quelques cubes elles s'éteignent ou clignotent sans grossir. Mesure faite avant le retrait, règle à 26 voisines « survit à 4–5, naît à 5 » : à 6 cubes, 3 141 graines s'éteignent, 220 se figent, 120 entrent dans un cycle.
+- **Motifs** : une galerie de 24 motifs en relief de la vie à la Conway des polycubes, fixes, oscillateurs et planeurs, chacun sous sa propre règle, du plus symétrique (8 rotations sur 24) au plus éclaté. Vignettes 3D fixes numérotées, avec forme, nature et période ; un clic joue le motif en grand. Catalogue trouvé une fois par `examples/pattern_gallery.rs` et embarqué dans le binaire : [docs/vie/conway.md](docs/vie/conway.md#galerie-de-motifs).
 - **Tirage uniforme** : un polycube tiré uniformément, à faire tourner en 3D.
 
 Les deux pages de tirage vont de 1 à 12 cubes.
