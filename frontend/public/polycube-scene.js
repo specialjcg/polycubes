@@ -97,8 +97,11 @@ class PolycubeScene extends HTMLElement {
     this.resizeObserver.observe(this);
     this.fitToElement();
     this.showCells();
+    // At once rather than at the next frame: a page of still views would
+    // otherwise hold all their contexts together, and the browser drops the
+    // oldest past a dozen or so.
     if (this.hasAttribute("still")) {
-      requestAnimationFrame(() => this.snapshot());
+      this.snapshot();
       return;
     }
     this.renderer.setAnimationLoop(() => {
@@ -114,6 +117,8 @@ class PolycubeScene extends HTMLElement {
       return;
     }
     this.fitToElement();
+    this.finishAppearingCubes();
+    this.controls.update();
     this.renderer.render(this.scene, this.camera);
     const image = document.createElement("img");
     image.src = this.renderer.domElement.toDataURL();
@@ -331,6 +336,16 @@ class PolycubeScene extends HTMLElement {
       const progress = Math.min((now - cube.userData.appearedAt) / APPEARANCE_MILLISECONDS, 1);
       cube.scale.setScalar(Math.max(progress, SMALLEST_VISIBLE_SCALE));
       if (progress === 1) {
+        delete cube.userData.appearedAt;
+      }
+    }
+  }
+
+  // A still view is drawn once: cubes still growing would be drawn tiny.
+  finishAppearingCubes() {
+    for (const cube of this.cubes.children) {
+      if (cube.userData.appearedAt !== undefined) {
+        cube.scale.setScalar(1);
         delete cube.userData.appearedAt;
       }
     }
