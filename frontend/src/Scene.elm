@@ -1,4 +1,4 @@
-module Scene exposing (Colouring(..), view, viewAmongNeighbours, viewColouredFramed, viewFirstCells)
+module Scene exposing (Colouring(..), view, viewAmongNeighbours, viewColouredFramed, viewFirstCells, viewStill)
 
 {-| The 3D view of a polycube, drawn by the `polycube-scene` custom element
 (`public/polycube-scene.js`).
@@ -71,6 +71,21 @@ viewColouredFramed colouring frame cells =
             :: cellsAttribute cells
             :: colouringAttributes colouring
         )
+        []
+
+
+{-| Draws copies of one polycube, `n` cells each and one colour each, once
+and for all, framed on the box between two opposite corner cells: the
+view is kept as an image, so that a page may show dozens of them.
+-}
+viewStill : Int -> { lowestCorner : Cell, highestCorner : Cell } -> List Cell -> Html msg
+viewStill cellsPerCopy frame cells =
+    Html.node "polycube-scene"
+        [ encodedCellsAttribute "framed" [ frame.lowestCorner, frame.highestCorner ]
+        , cellsAttribute cells
+        , copySizeAttribute cellsPerCopy
+        , Attr.attribute "still" ""
+        ]
         []
 
 

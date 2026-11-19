@@ -15,6 +15,9 @@
 // for thousands of cells. `copy-ids="[...]"` gives what tells each copy
 // from all others: it keeps its cubes while others die. `copy-shapes="[...]"`
 // then gives the shape of each copy, one colour per shape.
+// `still` draws the view once, keeps it as an image and lets its WebGL
+// context go: a page may then show dozens of views, past the few contexts
+// a browser keeps alive at once.
 // The Elm application owns the state; this element only draws what its
 // attributes describe.
 import * as THREE from "three";
@@ -94,6 +97,13 @@ class PolycubeScene extends HTMLElement {
     this.resizeObserver.observe(this);
     this.fitToElement();
     this.showCells();
+    // At once rather than at the next frame: a page of still views would
+    // otherwise hold all their contexts together, and the browser drops the
+    // oldest past a dozen or so.
+    if (this.hasAttribute("still")) {
+      this.snapshot();
+      return;
+    }
     this.renderer.setAnimationLoop(() => {
       this.growAppearingCubes();
       this.controls.update();
@@ -101,13 +111,33 @@ class PolycubeScene extends HTMLElement {
     });
   }
 
+  // Draws the view once into an image, then lets the renderer go.
+  snapshot() {
+    if (!this.renderer) {
+      return;
+    }
+    this.fitToElement();
+    this.finishAppearingCubes();
+    this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+    const image = document.createElement("img");
+    image.src = this.renderer.domElement.toDataURL();
+    image.alt = "";
+    this.disconnectedCallback();
+    this.appendChild(image);
+  }
+
   disconnectedCallback() {
+    if (!this.renderer) {
+      return;
+    }
     this.renderer.setAnimationLoop(null);
     this.resizeObserver.disconnect();
     this.controls.dispose();
     this.clearCubes();
     this.disposeCrowd();
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
     this.renderer = null;
   }
@@ -306,6 +336,16 @@ class PolycubeScene extends HTMLElement {
       const progress = Math.min((now - cube.userData.appearedAt) / APPEARANCE_MILLISECONDS, 1);
       cube.scale.setScalar(Math.max(progress, SMALLEST_VISIBLE_SCALE));
       if (progress === 1) {
+        delete cube.userData.appearedAt;
+      }
+    }
+  }
+
+  // A still view is drawn once: cubes still growing would be drawn tiny.
+  finishAppearingCubes() {
+    for (const cube of this.cubes.children) {
+      if (cube.userData.appearedAt !== undefined) {
+        cube.scale.setScalar(1);
         delete cube.userData.appearedAt;
       }
     }

@@ -113,6 +113,42 @@ trépied. Les plus épais :
   planeurs les plus rapides, mais minces : un tube de 2 × 2.
 - Domino, I3, L3, T, S et L ne donnent aucun planeur en relief ici.
 
+## Galerie de motifs
+
+Comme la vie de Conway a ses blocs, ses clignotants et ses planeurs, cette
+vie a ses motifs fixes, ses oscillateurs et ses planeurs. L'exemple
+`pattern_gallery` reprend les formes, les règles et les petits départs de la
+recherche de planeurs (50 départs par règle) et classe chaque motif qui
+revient tel quel :
+
+- **nature** : fixe (de retour à la génération suivante, en place),
+  oscillateur (de retour en place après quelques générations) ou planeur (de
+  retour déplacé) ; avec sa **période** et son **déplacement** ;
+- **couches** occupées selon chaque axe ;
+- **symétrie** : le nombre des 24 rotations du cube qui le laissent tel quel,
+  de 1 (aucune) à 24 (un cube plein).
+
+Un motif tourné autrement est le même motif : chacun est ramené à une
+**forme canonique**, la plus petite de ses 24 rotations, sans miroir, pour
+n'être compté qu'une fois. Seuls restent les motifs d'au moins 3 polycubes,
+en relief (2 couches au moins selon chaque axe).
+
+Il en sort 1 634 motifs fixes, 137 oscillateurs et 5 planeurs distincts : les
+trois déjà connus, plus un carré de période 6 et un trépied de période 6.
+24 sont retenus pour la variété de forme, de nature, de symétrie et de
+taille, rangés du plus symétrique au plus éclaté, et écrits dans
+[galerie.json](galerie.json) :
+
+- symétries 8, 6, 4, 2 puis 1 : les motifs très symétriques sont tous fixes,
+  petits et serrés ; oscillateurs et planeurs n'en ont aucune ;
+- oscillateurs de périodes 2, 4 et 6, sur 7 formes ;
+- les 5 planeurs, de périodes 6, 12 et 57.
+
+La page **Motifs** de l'application montre les 24 en vignettes fixes,
+numérotées et étiquetées ; un clic joue le motif en grand sous sa propre
+règle. Le catalogue est embarqué dans le binaire : rien n'est calculé à
+l'ouverture.
+
 ## Ce qu'on peut en dire, et ce qu'on ne peut pas
 
 - Une règle à la Conway pour polycubes entiers existe, sans hasard, avec une
@@ -135,4 +171,10 @@ Planeurs en relief, 1 000 départs par règle à partir de la graine 301 :
 
 ```bash
 cargo run --release -p polycubes-automaton --example glider_search -- 1000 301
+```
+
+Galerie de motifs, 50 départs par règle (quelques minutes) :
+
+```bash
+cargo run --release -p polycubes-automaton --example pattern_gallery -- 50 docs/vie/galerie.json
 ```

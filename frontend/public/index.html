@@ -34,6 +34,11 @@
     .gallery polycube-scene { height: 190px; }
     .automaton polycube-scene { height: 560px; }
     .gallery .status { margin: 4px 0 0; font-size: 0.85rem; }
+    .gallery.patterns { grid-template-columns: repeat(6, 1fr); }
+    .patterns section { cursor: pointer; }
+    .patterns polycube-scene { height: 150px; }
+    .patterns section.chosen polycube-scene { border-color: #2b241c; border-width: 2px; }
+    polycube-scene img { display: block; width: 100%; height: 100%; }
     .histograms { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 12px; }
     .histogram { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; align-items: end; height: 120px; border-bottom: 1px solid #8a7a66; }
     .histogram .bar { background: #b5651d; min-height: 0; }
